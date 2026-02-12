@@ -4,6 +4,11 @@ import { getDeltaFromMovimiento, getEstadoReposicion } from "@/lib/inventory-rul
 import { calculateUnitCostFromPurchase, convertQuantity } from "@/lib/unit-conversion";
 
 type DecimalLike = { toNumber: () => number };
+type InventarioClient = {
+  inventarioInsumo: {
+    upsert: typeof db.inventarioInsumo.upsert;
+  };
+};
 
 function decimalToNumber(value: DecimalLike | number): number {
   if (typeof value === "number") return value;
@@ -12,7 +17,7 @@ function decimalToNumber(value: DecimalLike | number): number {
 
 async function ensureInventarioInsumo(
   insumoId: string,
-  tx: typeof db = db,
+  tx: InventarioClient = db,
 ) {
   return tx.inventarioInsumo.upsert({
     where: { insumoId },
