@@ -20,17 +20,26 @@ enum UnidadBase {
   UNIDAD
 }
 
+enum TipoMovimientoInventario {
+  ENTRADA
+  SALIDA
+  AJUSTE
+}
+
 model Insumo {
-  id           String         @id @default(cuid())
-  nombre       String         @unique
+  id           String              @id @default(cuid())
+  nombre       String              @unique
   categoria    String
   unidadBase   UnidadBase
-  costoUnidad  Decimal        @db.Decimal(12, 4)
-  mermaPct     Decimal        @default(0) @db.Decimal(5, 2)
+  costoUnidad  Decimal             @db.Decimal(12, 4)
+  mermaPct     Decimal             @default(0) @db.Decimal(5, 2)
   proveedor    String?
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
   recetaInsumos RecetaInsumo[]
+  compras      CompraInsumo[]
+  movimientos  MovimientoInventario[]
+  inventario   InventarioInsumo?
 }
 
 model Receta {
@@ -66,4 +75,57 @@ model ConfiguracionCosteo {
   redondeoPrecio   Decimal  @default(100) @db.Decimal(8, 2)
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
+}
+
+model Proveedor {
+  id        String        @id @default(cuid())
+  nombre    String        @unique
+  contacto  String?
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  compras   CompraInsumo[]
+}
+
+model CompraInsumo {
+  id                   String               @id @default(cuid())
+  insumoId             String
+  proveedorId          String?
+  fechaCompra          DateTime             @default(now())
+  cantidadCompra       Decimal              @db.Decimal(12, 4)
+  unidadCompra         UnidadBase
+  precioTotal          Decimal              @db.Decimal(12, 2)
+  costoUnitarioCalculado Decimal            @db.Decimal(12, 4)
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+  insumo               Insumo               @relation(fields: [insumoId], references: [id], onDelete: Cascade)
+  proveedor            Proveedor?           @relation(fields: [proveedorId], references: [id], onDelete: SetNull)
+  movimientos          MovimientoInventario[]
+
+  @@index([insumoId, fechaCompra])
+  @@index([proveedorId, fechaCompra])
+}
+
+model InventarioInsumo {
+  insumoId     String   @id
+  stockActual  Decimal  @default(0) @db.Decimal(12, 4)
+  stockMinimo  Decimal  @default(0) @db.Decimal(12, 4)
+  updatedAt    DateTime @updatedAt
+  insumo       Insumo   @relation(fields: [insumoId], references: [id], onDelete: Cascade)
+}
+
+model MovimientoInventario {
+  id                String                  @id @default(cuid())
+  insumoId          String
+  tipo              TipoMovimientoInventario
+  cantidad          Decimal                 @db.Decimal(12, 4)
+  motivo            String?
+  fechaMovimiento   DateTime                @default(now())
+  referenciaCompraId String?
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+  insumo            Insumo                  @relation(fields: [insumoId], references: [id], onDelete: Cascade)
+  referenciaCompra  CompraInsumo?           @relation(fields: [referenciaCompraId], references: [id], onDelete: SetNull)
+
+  @@index([insumoId, fechaMovimiento])
+  @@index([tipo, fechaMovimiento])
 }

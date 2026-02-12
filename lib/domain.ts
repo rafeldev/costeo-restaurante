@@ -8,6 +8,17 @@ export const unidadBaseValues = [
 
 export type UnidadBaseValue = (typeof unidadBaseValues)[number];
 
+export const tipoMovimientoValues = ["ENTRADA", "SALIDA", "AJUSTE"] as const;
+export type TipoMovimientoValue = (typeof tipoMovimientoValues)[number];
+
+export const tipoMovimientoLabels: Record<TipoMovimientoValue, string> = {
+  ENTRADA: "Entrada",
+  SALIDA: "Salida",
+  AJUSTE: "Ajuste",
+};
+
+export type EstadoReposicion = "verde" | "amarillo" | "rojo";
+
 export const unidadBaseLabels: Record<UnidadBaseValue, string> = {
   GRAMO: "Gramo (g)",
   KILOGRAMO: "Kilogramo (kg)",

@@ -15,6 +15,21 @@ async function main() {
     });
   }
 
+  const proveedoresBase = [
+    { nombre: "Proveedor local", contacto: "proveedorlocal@example.com" },
+    { nombre: "Carnicería del barrio", contacto: "carniceria@example.com" },
+    { nombre: "Distribuidor lácteos", contacto: "lacteos@example.com" },
+    { nombre: "Empaques SAS", contacto: "empaques@example.com" },
+  ];
+
+  for (const proveedor of proveedoresBase) {
+    await prisma.proveedor.upsert({
+      where: { nombre: proveedor.nombre },
+      create: proveedor,
+      update: { contacto: proveedor.contacto },
+    });
+  }
+
   const insumosBase = [
     {
       nombre: "Pan brioche",
@@ -59,7 +74,7 @@ async function main() {
   ];
 
   for (const insumo of insumosBase) {
-    await prisma.insumo.upsert({
+    const upserted = await prisma.insumo.upsert({
       where: { nombre: insumo.nombre },
       create: insumo,
       update: {
@@ -69,6 +84,12 @@ async function main() {
         mermaPct: insumo.mermaPct,
         proveedor: insumo.proveedor,
       },
+    });
+
+    await prisma.inventarioInsumo.upsert({
+      where: { insumoId: upserted.id },
+      create: { insumoId: upserted.id, stockActual: 0, stockMinimo: 0 },
+      update: {},
     });
   }
 }

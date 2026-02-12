@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { unidadBaseValues } from "@/lib/domain";
+import { tipoMovimientoValues, unidadBaseValues } from "@/lib/domain";
 
 const porcentajeSchema = z.number().min(0).max(100);
 
@@ -31,6 +31,32 @@ export const configuracionCosteoSchema = z.object({
   margenObjetivoPct: porcentajeSchema,
   impuestoPct: porcentajeSchema,
   redondeoPrecio: z.number().positive(),
+});
+
+export const proveedorSchema = z.object({
+  nombre: z.string().trim().min(2).max(120),
+  contacto: z.string().trim().max(120).optional().or(z.literal("")),
+});
+
+export const compraInsumoSchema = z.object({
+  insumoId: z.string().min(1),
+  proveedorId: z.string().optional().nullable(),
+  fechaCompra: z.string().min(1).optional(),
+  cantidadCompra: z.number().positive(),
+  unidadCompra: z.enum(unidadBaseValues),
+  precioTotal: z.number().positive(),
+});
+
+export const inventarioPatchSchema = z.object({
+  stockMinimo: z.number().min(0),
+});
+
+export const movimientoInventarioSchema = z.object({
+  insumoId: z.string().min(1),
+  tipo: z.enum(tipoMovimientoValues),
+  cantidad: z.number().positive(),
+  motivo: z.string().trim().max(200).optional().or(z.literal("")),
+  fechaMovimiento: z.string().min(1).optional(),
 });
 
 export function parseNumberInput(value: unknown): number | undefined {

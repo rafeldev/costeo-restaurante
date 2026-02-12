@@ -1,0 +1,147 @@
+import { db } from "@/lib/db";
+import type { TipoMovimientoValue, UnidadBaseValue } from "@/lib/domain";
+import { getDeltaFromMovimiento, getEstadoReposicion } from "@/lib/inventory-rules";
+import { calculateUnitCostFromPurchase, convertQuantity } from "@/lib/unit-conversion";
+
+type DecimalLike = { toNumber: () => number };
+
+function decimalToNumber(value: DecimalLike | number): number {
+  if (typeof value === "number") return value;
+  return value.toNumber();
+}
+
+async function ensureInventarioInsumo(
+  insumoId: string,
+  tx: typeof db = db,
+) {
+  return tx.inventarioInsumo.upsert({
+    where: { insumoId },
+    create: { insumoId, stockActual: 0, stockMinimo: 0 },
+    update: {},
+  });
+}
+
+export async function registrarCompraInsumo(payload: {
+  insumoId: string;
+  proveedorId?: string | null;
+  fechaCompra?: Date;
+  cantidadCompra: number;
+  unidadCompra: UnidadBaseValue;
+  precioTotal: number;
+}) {
+  return db.$transaction(async (tx) => {
+    const insumo = await tx.insumo.findUnique({ where: { id: payload.insumoId } });
+    if (!insumo) {
+      throw new Error("Insumo no encontrado");
+    }
+
+    const unidadBase = insumo.unidadBase as UnidadBaseValue;
+    const costoUnitarioCalculado = calculateUnitCostFromPurchase({
+      precioCompra: payload.precioTotal,
+      cantidadCompra: payload.cantidadCompra,
+      unidadCompra: payload.unidadCompra,
+      unidadBase,
+    });
+
+    if (!costoUnitarioCalculado) {
+      throw new Error("No fue posible calcular costo unitario para la compra");
+    }
+
+    const cantidadConvertida = convertQuantity(
+      payload.cantidadCompra,
+      payload.unidadCompra,
+      unidadBase,
+    );
+    if (!cantidadConvertida) {
+      throw new Error("La unidad de compra no es compatible con la unidad base del insumo");
+    }
+
+    const compra = await tx.compraInsumo.create({
+      data: {
+        insumoId: payload.insumoId,
+        proveedorId: payload.proveedorId ?? null,
+        fechaCompra: payload.fechaCompra ?? new Date(),
+        cantidadCompra: payload.cantidadCompra,
+        unidadCompra: payload.unidadCompra,
+        precioTotal: payload.precioTotal,
+        costoUnitarioCalculado,
+      },
+    });
+
+    await tx.insumo.update({
+      where: { id: payload.insumoId },
+      data: {
+        costoUnidad: costoUnitarioCalculado,
+      },
+    });
+
+    const inventario = await ensureInventarioInsumo(payload.insumoId, tx);
+    const stockActual = decimalToNumber(inventario.stockActual) + cantidadConvertida;
+    const updatedInventario = await tx.inventarioInsumo.update({
+      where: { insumoId: payload.insumoId },
+      data: { stockActual },
+    });
+
+    await tx.movimientoInventario.create({
+      data: {
+        insumoId: payload.insumoId,
+        tipo: "ENTRADA",
+        cantidad: cantidadConvertida,
+        motivo: "Entrada por compra",
+        referenciaCompraId: compra.id,
+        fechaMovimiento: payload.fechaCompra ?? new Date(),
+      },
+    });
+
+    return {
+      compra,
+      inventario: {
+        stockActual: decimalToNumber(updatedInventario.stockActual),
+        stockMinimo: decimalToNumber(updatedInventario.stockMinimo),
+      },
+    };
+  });
+}
+
+export async function registrarMovimientoInventario(payload: {
+  insumoId: string;
+  tipo: TipoMovimientoValue;
+  cantidad: number;
+  motivo?: string;
+  fechaMovimiento?: Date;
+}) {
+  return db.$transaction(async (tx) => {
+    const insumo = await tx.insumo.findUnique({ where: { id: payload.insumoId } });
+    if (!insumo) {
+      throw new Error("Insumo no encontrado");
+    }
+
+    const inventario = await ensureInventarioInsumo(payload.insumoId, tx);
+    const delta = getDeltaFromMovimiento(payload.tipo, payload.cantidad);
+    const nextStock = decimalToNumber(inventario.stockActual) + delta;
+
+    await tx.movimientoInventario.create({
+      data: {
+        insumoId: payload.insumoId,
+        tipo: payload.tipo,
+        cantidad: payload.cantidad,
+        motivo: payload.motivo,
+        fechaMovimiento: payload.fechaMovimiento ?? new Date(),
+      },
+    });
+
+    const updatedInventario = await tx.inventarioInsumo.update({
+      where: { insumoId: payload.insumoId },
+      data: { stockActual: nextStock },
+    });
+
+    return {
+      stockActual: decimalToNumber(updatedInventario.stockActual),
+      stockMinimo: decimalToNumber(updatedInventario.stockMinimo),
+      estado: getEstadoReposicion(
+        decimalToNumber(updatedInventario.stockActual),
+        decimalToNumber(updatedInventario.stockMinimo),
+      ),
+    };
+  });
+}

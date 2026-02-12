@@ -1,6 +1,7 @@
 import { UnidadBase } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { getEstadoReposicion } from "@/lib/inventory-rules";
 import { hasPrismaErrorCode } from "@/lib/prisma-errors";
 import { decimalToNumber } from "@/lib/serializers";
 import { insumoSchema, parseNumberInput } from "@/lib/validation";
@@ -15,18 +16,37 @@ function serializeInsumo(insumo: {
   costoUnidad: { toNumber: () => number };
   mermaPct: { toNumber: () => number };
   proveedor: string | null;
+  inventario?: {
+    stockActual: { toNumber: () => number };
+    stockMinimo: { toNumber: () => number };
+  } | null;
   createdAt: Date;
   updatedAt: Date;
 }) {
+  const stockActual = insumo.inventario
+    ? (decimalToNumber(insumo.inventario.stockActual) ?? 0)
+    : null;
+  const stockMinimo = insumo.inventario
+    ? (decimalToNumber(insumo.inventario.stockMinimo) ?? 0)
+    : null;
   return {
     ...insumo,
     costoUnidad: decimalToNumber(insumo.costoUnidad),
     mermaPct: decimalToNumber(insumo.mermaPct),
+    inventario:
+      stockActual === null || stockMinimo === null
+        ? null
+        : {
+            stockActual,
+            stockMinimo,
+            estadoReposicion: getEstadoReposicion(stockActual, stockMinimo),
+          },
   };
 }
 
 export async function GET() {
   const insumos = await db.insumo.findMany({
+    include: { inventario: true },
     orderBy: { createdAt: "desc" },
   });
 
@@ -57,6 +77,15 @@ export async function POST(request: Request) {
         costoUnidad: parsed.data.costoUnidad,
         mermaPct: parsed.data.mermaPct,
         proveedor: parsed.data.proveedor || null,
+        inventario: {
+          create: {
+            stockActual: 0,
+            stockMinimo: 0,
+          },
+        },
+      },
+      include: {
+        inventario: true,
       },
     });
 

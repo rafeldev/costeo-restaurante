@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AlertasInventarioCard } from "@/components/inventario/AlertasInventarioCard";
 import { PageContainer } from "@/components/PageContainer";
 
 const modules = [
@@ -38,6 +39,9 @@ export default function Home() {
             </Link>
           </article>
         ))}
+      </section>
+      <section className="mt-6">
+        <AlertasInventarioCard />
       </section>
     </PageContainer>
   );

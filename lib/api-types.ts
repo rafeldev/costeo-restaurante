@@ -6,6 +6,11 @@ export type InsumoDTO = {
   costoUnidad: number;
   mermaPct: number;
   proveedor: string | null;
+  inventario?: {
+    stockActual: number;
+    stockMinimo: number;
+    estadoReposicion: "verde" | "amarillo" | "rojo";
+  } | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -60,4 +65,59 @@ export type CosteoDTO = {
     mermaPct: number;
     costoAplicado: number;
   }>;
+};
+
+export type ProveedorDTO = {
+  id: string;
+  nombre: string;
+  contacto: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CompraInsumoDTO = {
+  id: string;
+  insumoId: string;
+  proveedorId: string | null;
+  fechaCompra: string;
+  cantidadCompra: number;
+  unidadCompra: InsumoDTO["unidadBase"];
+  precioTotal: number;
+  costoUnitarioCalculado: number;
+  createdAt: string;
+  updatedAt: string;
+  insumo?: {
+    id: string;
+    nombre: string;
+    unidadBase: InsumoDTO["unidadBase"];
+  };
+  proveedor?: {
+    id: string;
+    nombre: string;
+  } | null;
+};
+
+export type MovimientoInventarioDTO = {
+  id: string;
+  insumoId: string;
+  tipo: "ENTRADA" | "SALIDA" | "AJUSTE";
+  cantidad: number;
+  motivo: string | null;
+  fechaMovimiento: string;
+  createdAt: string;
+  updatedAt: string;
+  referenciaCompraId: string | null;
+  insumo?: {
+    id: string;
+    nombre: string;
+    unidadBase: InsumoDTO["unidadBase"];
+  };
+};
+
+export type AlertaInventarioDTO = {
+  insumoId: string;
+  nombre: string;
+  stockActual: number;
+  stockMinimo: number;
+  estadoReposicion: "verde" | "amarillo" | "rojo";
 };

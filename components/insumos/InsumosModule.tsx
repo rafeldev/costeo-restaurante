@@ -301,6 +301,14 @@ export function InsumosModule() {
                   {formatMoney(insumo.costoUnidad)}/{unidadBaseShort[insumo.unidadBase]} ·
                   {" "}Merma {insumo.mermaPct}%
                 </p>
+                {insumo.inventario ? (
+                  <p className="mt-1 text-xs text-slate-500">
+                    Stock: {insumo.inventario.stockActual.toFixed(2)}{" "}
+                    {unidadBaseShort[insumo.unidadBase]} · mínimo{" "}
+                    {insumo.inventario.stockMinimo.toFixed(2)} · estado{" "}
+                    {insumo.inventario.estadoReposicion}
+                  </p>
+                ) : null}
               </div>
               <div className="flex flex-wrap gap-2">
                 <button
