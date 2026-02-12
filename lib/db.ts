@@ -10,7 +10,14 @@ const connectionString =
   process.env.DATABASE_URL ??
   "postgresql://johndoe:randompassword@localhost:5432/mydb?schema=public";
 
-const pool = new Pool({ connectionString });
+const parsedUrl = new URL(connectionString);
+const isLocalConnection =
+  parsedUrl.hostname === "localhost" || parsedUrl.hostname === "127.0.0.1";
+
+const pool = new Pool({
+  connectionString,
+  ssl: isLocalConnection ? false : { rejectUnauthorized: false },
+});
 const adapter = new PrismaPg(pool);
 
 export const db =
