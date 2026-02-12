@@ -201,7 +201,7 @@ export function InsumosModule() {
                 />
               </label>
               <label className="text-xs">
-                <span className="mb-1 block">Cantidad comprada</span>
+                <span className="mb-1 block">Cantidad</span>
                 <input
                   className="input"
                   type="number"
