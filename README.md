@@ -1,36 +1,69 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Costeo Restaurante MVP
 
-## Getting Started
+Aplicación web para calcular costos de producción y precio sugerido de venta en recetas de restaurante (iniciando con hamburguesas caseras, pero modelo genérico).
 
-First, run the development server:
+## Stack
+
+- Next.js (App Router) + TypeScript + Tailwind
+- Prisma ORM + PostgreSQL
+- React Hook Form + Zod
+- Vitest para pruebas unitarias del motor de pricing
+
+## Funcionalidades MVP
+
+- CRUD de insumos (materia prima, unidad base, merma y costo).
+- CRUD de recetas con ingredientes y rendimiento por porciones.
+- Configuración global de costeo: overhead, margen objetivo, impuesto y redondeo.
+- Cálculo de costo por receta y precio sugerido final.
+- Semáforo básico de rentabilidad con base en margen real vs objetivo.
+
+## Configuración local
+
+1. Instala dependencias:
+
+```bash
+npm install
+```
+
+2. Configura variables de entorno en `.env`:
+
+```bash
+DATABASE_URL="postgresql://usuario:password@localhost:5432/restaurante?schema=public"
+```
+
+3. Genera cliente Prisma y migra:
+
+```bash
+npm run db:generate
+npm run db:migrate
+```
+
+4. Carga datos iniciales:
+
+```bash
+npm run db:seed
+```
+
+5. Ejecuta el proyecto:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Scripts
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- `npm run dev`: levanta la app en desarrollo.
+- `npm run lint`: revisa reglas de lint.
+- `npm run test`: ejecuta pruebas unitarias.
+- `npm run db:generate`: genera Prisma Client.
+- `npm run db:migrate`: crea/aplica migraciones.
+- `npm run db:seed`: inserta configuración e insumos base.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Deploy sugerido (Vercel + Neon/Supabase)
 
-## Learn More
+1. Crear base PostgreSQL gestionada (Neon o Supabase).
+2. Configurar `DATABASE_URL` en variables de entorno de Vercel.
+3. Ejecutar migraciones en CI/CD o previo al primer deploy.
+4. Deploy del repositorio en Vercel.
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Recomendación: agregar un paso de migración controlada en pipeline antes de promover a producción.
