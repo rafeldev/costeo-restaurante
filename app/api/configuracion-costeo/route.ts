@@ -1,4 +1,3 @@
-import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { decimalToNumber } from "@/lib/serializers";
@@ -6,15 +5,7 @@ import { configuracionCosteoSchema, parseNumberInput } from "@/lib/validation";
 
 export const runtime = "nodejs";
 
-function serializeConfig(config: {
-  id: string;
-  overheadPct: Prisma.Decimal;
-  margenObjetivoPct: Prisma.Decimal;
-  impuestoPct: Prisma.Decimal;
-  redondeoPrecio: Prisma.Decimal;
-  createdAt: Date;
-  updatedAt: Date;
-}) {
+function serializeConfig(config: Awaited<ReturnType<typeof ensureConfig>>) {
   return {
     ...config,
     overheadPct: decimalToNumber(config.overheadPct),
