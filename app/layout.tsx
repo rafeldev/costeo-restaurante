@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Costeo Restaurante MVP",
+  title: "CalculaChef | Costeo Inteligente",
   description: "Sistema de costeo de recetas y precio sugerido de venta.",
 };
 

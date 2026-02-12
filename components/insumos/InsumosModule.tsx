@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import type { z } from "zod";
 import type { InsumoDTO } from "@/lib/api-types";
 import {
   unidadBaseLabels,
@@ -15,14 +16,7 @@ import { calculateUnitCostFromPurchase } from "@/lib/unit-conversion";
 import { insumoSchema } from "@/lib/validation";
 import { Field } from "@/components/ui/Field";
 
-type FormValues = {
-  nombre: string;
-  categoria: string;
-  unidadBase: InsumoDTO["unidadBase"];
-  costoUnidad: number;
-  mermaPct: number;
-  proveedor?: string;
-};
+type FormValues = z.input<typeof insumoSchema>;
 
 const defaultValues: FormValues = {
   nombre: "",
