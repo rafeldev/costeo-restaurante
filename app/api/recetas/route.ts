@@ -1,6 +1,6 @@
-import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { hasPrismaErrorCode } from "@/lib/prisma-errors";
 import { decimalToNumber } from "@/lib/serializers";
 import { parseNumberInput, recetaSchema } from "@/lib/validation";
 
@@ -12,14 +12,14 @@ function serializeReceta(receta: {
   tipoProducto: string;
   rendimientoPorciones: number;
   tiempoPreparacionMin: number | null;
-  precioVentaActual: Prisma.Decimal | null;
+  precioVentaActual: { toNumber: () => number } | null;
   createdAt: Date;
   updatedAt: Date;
   ingredientes?: Array<{
     id: string;
     recetaId: string;
     insumoId: string;
-    cantidad: Prisma.Decimal;
+    cantidad: { toNumber: () => number };
     insumo?: {
       id: string;
       nombre: string;
@@ -96,10 +96,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json(serializeReceta(created), { status: 201 });
   } catch (error) {
-    if (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === "P2003"
-    ) {
+    if (hasPrismaErrorCode(error, "P2003")) {
       return NextResponse.json(
         { message: "Uno o más insumos no existen." },
         { status: 400 },

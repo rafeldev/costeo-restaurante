@@ -1,6 +1,7 @@
-import { Prisma, UnidadBase } from "@prisma/client";
+import { UnidadBase } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { hasPrismaErrorCode } from "@/lib/prisma-errors";
 import { decimalToNumber } from "@/lib/serializers";
 import { insumoSchema, parseNumberInput } from "@/lib/validation";
 
@@ -11,8 +12,8 @@ function serializeInsumo(insumo: {
   nombre: string;
   categoria: string;
   unidadBase: UnidadBase;
-  costoUnidad: Prisma.Decimal;
-  mermaPct: Prisma.Decimal;
+  costoUnidad: { toNumber: () => number };
+  mermaPct: { toNumber: () => number };
   proveedor: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -61,10 +62,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json(serializeInsumo(created), { status: 201 });
   } catch (error) {
-    if (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === "P2002"
-    ) {
+    if (hasPrismaErrorCode(error, "P2002")) {
       return NextResponse.json(
         { message: "Ya existe un insumo con ese nombre." },
         { status: 409 },

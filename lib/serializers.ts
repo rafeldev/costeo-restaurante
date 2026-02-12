@@ -1,6 +1,6 @@
-import { Prisma } from "@prisma/client";
+type DecimalLike = { toNumber: () => number };
 
-export function decimalToNumber(value: Prisma.Decimal | number | null): number | null {
+export function decimalToNumber(value: DecimalLike | number | null): number | null {
   if (value === null) return null;
   if (typeof value === "number") return value;
   return value.toNumber();

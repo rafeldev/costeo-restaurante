@@ -1,6 +1,7 @@
-import { Prisma, UnidadBase } from "@prisma/client";
+import { UnidadBase } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { hasPrismaErrorCode } from "@/lib/prisma-errors";
 import { decimalToNumber } from "@/lib/serializers";
 import { insumoSchema, parseNumberInput } from "@/lib/validation";
 
@@ -49,16 +50,10 @@ export async function PATCH(request: Request, context: RouteContext) {
       mermaPct: decimalToNumber(updated.mermaPct),
     });
   } catch (error) {
-    if (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === "P2025"
-    ) {
+    if (hasPrismaErrorCode(error, "P2025")) {
       return NextResponse.json({ message: "Insumo no encontrado" }, { status: 404 });
     }
-    if (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === "P2002"
-    ) {
+    if (hasPrismaErrorCode(error, "P2002")) {
       return NextResponse.json(
         { message: "Ya existe un insumo con ese nombre." },
         { status: 409 },
@@ -78,16 +73,10 @@ export async function DELETE(_request: Request, context: RouteContext) {
     await db.insumo.delete({ where: { id } });
     return NextResponse.json({ ok: true });
   } catch (error) {
-    if (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === "P2025"
-    ) {
+    if (hasPrismaErrorCode(error, "P2025")) {
       return NextResponse.json({ message: "Insumo no encontrado" }, { status: 404 });
     }
-    if (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === "P2003"
-    ) {
+    if (hasPrismaErrorCode(error, "P2003")) {
       return NextResponse.json(
         { message: "No puedes eliminar un insumo usado en recetas." },
         { status: 409 },

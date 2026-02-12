@@ -1,9 +1,10 @@
-import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import type { CosteoResultado } from "@/lib/domain";
 import { calculateSuggestedPrice } from "@/lib/pricing/calculateSuggestedPrice";
 
-function decimalToNumber(value: Prisma.Decimal | number): number {
+type DecimalLike = { toNumber: () => number };
+
+function decimalToNumber(value: DecimalLike | number): number {
   if (typeof value === "number") return value;
   return value.toNumber();
 }
