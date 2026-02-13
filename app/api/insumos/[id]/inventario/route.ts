@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { UnauthorizedError, requireAuthUser, unauthorizedResponse } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { getEstadoReposicion } from "@/lib/inventory-rules";
 import { decimalToNumber } from "@/lib/serializers";
@@ -36,37 +37,65 @@ function serializeInventario(inventario: {
 
 export async function GET(_request: Request, context: RouteContext) {
   const { id } = await context.params;
-  const insumo = await db.insumo.findUnique({ where: { id }, select: { id: true } });
-  if (!insumo) {
-    return NextResponse.json({ message: "Insumo no encontrado" }, { status: 404 });
+  try {
+    const user = await requireAuthUser();
+    const insumo = await db.insumo.findFirst({
+      where: { id, ownerId: user.id },
+      select: { id: true },
+    });
+    if (!insumo) {
+      return NextResponse.json({ message: "Insumo no encontrado" }, { status: 404 });
+    }
+    const inventario = await ensureInventario(id);
+    return NextResponse.json(serializeInventario(inventario));
+  } catch (error) {
+    if (error instanceof UnauthorizedError) {
+      return unauthorizedResponse();
+    }
+    return NextResponse.json(
+      { message: "No se pudo consultar inventario." },
+      { status: 500 },
+    );
   }
-  const inventario = await ensureInventario(id);
-  return NextResponse.json(serializeInventario(inventario));
 }
 
 export async function PATCH(request: Request, context: RouteContext) {
   const { id } = await context.params;
-  const insumo = await db.insumo.findUnique({ where: { id }, select: { id: true } });
-  if (!insumo) {
-    return NextResponse.json({ message: "Insumo no encontrado" }, { status: 404 });
-  }
-  const body = await request.json();
-  const parsed = inventarioPatchSchema.safeParse({
-    stockMinimo: parseNumberInput(body.stockMinimo),
-  });
+  try {
+    const user = await requireAuthUser();
+    const insumo = await db.insumo.findFirst({
+      where: { id, ownerId: user.id },
+      select: { id: true },
+    });
+    if (!insumo) {
+      return NextResponse.json({ message: "Insumo no encontrado" }, { status: 404 });
+    }
+    const body = await request.json();
+    const parsed = inventarioPatchSchema.safeParse({
+      stockMinimo: parseNumberInput(body.stockMinimo),
+    });
 
-  if (!parsed.success) {
+    if (!parsed.success) {
+      return NextResponse.json(
+        { message: "Datos inválidos", issues: parsed.error.flatten() },
+        { status: 400 },
+      );
+    }
+
+    const inventario = await db.inventarioInsumo.upsert({
+      where: { insumoId: id },
+      create: { insumoId: id, stockActual: 0, stockMinimo: parsed.data.stockMinimo },
+      update: { stockMinimo: parsed.data.stockMinimo },
+    });
+
+    return NextResponse.json(serializeInventario(inventario));
+  } catch (error) {
+    if (error instanceof UnauthorizedError) {
+      return unauthorizedResponse();
+    }
     return NextResponse.json(
-      { message: "Datos inválidos", issues: parsed.error.flatten() },
-      { status: 400 },
+      { message: "No se pudo actualizar inventario." },
+      { status: 500 },
     );
   }
-
-  const inventario = await db.inventarioInsumo.upsert({
-    where: { insumoId: id },
-    create: { insumoId: id, stockActual: 0, stockMinimo: parsed.data.stockMinimo },
-    update: { stockMinimo: parsed.data.stockMinimo },
-  });
-
-  return NextResponse.json(serializeInventario(inventario));
 }

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { UnauthorizedError, requireAuthUser, unauthorizedResponse } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { hasPrismaErrorCode } from "@/lib/prisma-errors";
 import { decimalToNumber } from "@/lib/serializers";
@@ -38,20 +39,33 @@ function serializeReceta(receta: {
 }
 
 export async function GET() {
-  const recetas = await db.receta.findMany({
-    include: {
-      ingredientes: {
-        include: { insumo: true },
+  try {
+    const user = await requireAuthUser();
+    const recetas = await db.receta.findMany({
+      where: { ownerId: user.id },
+      include: {
+        ingredientes: {
+          include: { insumo: true },
+        },
       },
-    },
-    orderBy: { createdAt: "desc" },
-  });
+      orderBy: { createdAt: "desc" },
+    });
 
-  return NextResponse.json(recetas.map(serializeReceta));
+    return NextResponse.json(recetas.map(serializeReceta));
+  } catch (error) {
+    if (error instanceof UnauthorizedError) {
+      return unauthorizedResponse();
+    }
+    return NextResponse.json(
+      { message: "No se pudo consultar las recetas." },
+      { status: 500 },
+    );
+  }
 }
 
 export async function POST(request: Request) {
   try {
+    const user = await requireAuthUser();
     const body = await request.json();
     const parsed = recetaSchema.safeParse({
       ...body,
@@ -73,8 +87,23 @@ export async function POST(request: Request) {
       );
     }
 
+    const insumoIds = [...new Set(parsed.data.ingredientes.map((item) => item.insumoId))];
+    const ownedInsumos = await db.insumo.count({
+      where: {
+        ownerId: user.id,
+        id: { in: insumoIds },
+      },
+    });
+    if (ownedInsumos !== insumoIds.length) {
+      return NextResponse.json(
+        { message: "Uno o más insumos no pertenecen al usuario autenticado." },
+        { status: 403 },
+      );
+    }
+
     const created = await db.receta.create({
       data: {
+        ownerId: user.id,
         nombre: parsed.data.nombre,
         tipoProducto: parsed.data.tipoProducto,
         rendimientoPorciones: parsed.data.rendimientoPorciones,
@@ -96,6 +125,9 @@ export async function POST(request: Request) {
 
     return NextResponse.json(serializeReceta(created), { status: 201 });
   } catch (error) {
+    if (error instanceof UnauthorizedError) {
+      return unauthorizedResponse();
+    }
     if (hasPrismaErrorCode(error, "P2003")) {
       return NextResponse.json(
         { message: "Uno o más insumos no existen." },

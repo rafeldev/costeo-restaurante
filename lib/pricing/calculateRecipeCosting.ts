@@ -9,10 +9,13 @@ function decimalToNumber(value: DecimalLike | number): number {
   return value.toNumber();
 }
 
-export async function calculateRecipeCosting(recetaId: string): Promise<CosteoResultado> {
+export async function calculateRecipeCosting(
+  recetaId: string,
+  ownerId: string,
+): Promise<CosteoResultado> {
   const [receta, config] = await Promise.all([
-    db.receta.findUnique({
-      where: { id: recetaId },
+    db.receta.findFirst({
+      where: { id: recetaId, ownerId },
       include: {
         ingredientes: {
           include: { insumo: true },
@@ -21,6 +24,7 @@ export async function calculateRecipeCosting(recetaId: string): Promise<CosteoRe
       },
     }),
     db.configuracionCosteo.findFirst({
+      where: { ownerId },
       orderBy: { createdAt: "asc" },
     }),
   ]);
@@ -30,6 +34,12 @@ export async function calculateRecipeCosting(recetaId: string): Promise<CosteoRe
   }
   if (!config) {
     throw new Error("Configuración de costeo no encontrada");
+  }
+  const hasForeignIngredient = receta.ingredientes.some(
+    (item) => item.insumo.ownerId !== ownerId,
+  );
+  if (hasForeignIngredient) {
+    throw new Error("Receta con ingredientes fuera del alcance del usuario");
   }
 
   const desgloseIngredientes = receta.ingredientes.map((item) => {

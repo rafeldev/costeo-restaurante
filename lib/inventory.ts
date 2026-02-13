@@ -27,6 +27,7 @@ async function ensureInventarioInsumo(
 }
 
 export async function registrarCompraInsumo(payload: {
+  ownerId: string;
   insumoId: string;
   proveedorId?: string | null;
   fechaCompra?: Date;
@@ -35,9 +36,21 @@ export async function registrarCompraInsumo(payload: {
   precioTotal: number;
 }) {
   return db.$transaction(async (tx) => {
-    const insumo = await tx.insumo.findUnique({ where: { id: payload.insumoId } });
+    const insumo = await tx.insumo.findFirst({
+      where: { id: payload.insumoId, ownerId: payload.ownerId },
+    });
     if (!insumo) {
       throw new Error("Insumo no encontrado");
+    }
+
+    if (payload.proveedorId) {
+      const proveedor = await tx.proveedor.findFirst({
+        where: { id: payload.proveedorId, ownerId: payload.ownerId },
+        select: { id: true },
+      });
+      if (!proveedor) {
+        throw new Error("Proveedor no encontrado para el usuario");
+      }
     }
 
     const unidadBase = insumo.unidadBase as UnidadBaseValue;
@@ -109,6 +122,7 @@ export async function registrarCompraInsumo(payload: {
 }
 
 export async function registrarMovimientoInventario(payload: {
+  ownerId: string;
   insumoId: string;
   tipo: TipoMovimientoValue;
   cantidad: number;
@@ -116,7 +130,9 @@ export async function registrarMovimientoInventario(payload: {
   fechaMovimiento?: Date;
 }) {
   return db.$transaction(async (tx) => {
-    const insumo = await tx.insumo.findUnique({ where: { id: payload.insumoId } });
+    const insumo = await tx.insumo.findFirst({
+      where: { id: payload.insumoId, ownerId: payload.ownerId },
+    });
     if (!insumo) {
       throw new Error("Insumo no encontrado");
     }

@@ -1,6 +1,7 @@
 import { UnidadBase } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { UnauthorizedError, requireAuthUser, unauthorizedResponse } from "@/lib/auth";
 import { getEstadoReposicion } from "@/lib/inventory-rules";
 import { hasPrismaErrorCode } from "@/lib/prisma-errors";
 import { decimalToNumber } from "@/lib/serializers";
@@ -45,16 +46,29 @@ function serializeInsumo(insumo: {
 }
 
 export async function GET() {
-  const insumos = await db.insumo.findMany({
-    include: { inventario: true },
-    orderBy: { createdAt: "desc" },
-  });
+  try {
+    const user = await requireAuthUser();
+    const insumos = await db.insumo.findMany({
+      where: { ownerId: user.id },
+      include: { inventario: true },
+      orderBy: { createdAt: "desc" },
+    });
 
-  return NextResponse.json(insumos.map(serializeInsumo));
+    return NextResponse.json(insumos.map(serializeInsumo));
+  } catch (error) {
+    if (error instanceof UnauthorizedError) {
+      return unauthorizedResponse();
+    }
+    return NextResponse.json(
+      { message: "No se pudo consultar los insumos." },
+      { status: 500 },
+    );
+  }
 }
 
 export async function POST(request: Request) {
   try {
+    const user = await requireAuthUser();
     const body = await request.json();
     const parsed = insumoSchema.safeParse({
       ...body,
@@ -71,6 +85,7 @@ export async function POST(request: Request) {
 
     const created = await db.insumo.create({
       data: {
+        ownerId: user.id,
         nombre: parsed.data.nombre,
         categoria: parsed.data.categoria,
         unidadBase: parsed.data.unidadBase as UnidadBase,
@@ -91,6 +106,9 @@ export async function POST(request: Request) {
 
     return NextResponse.json(serializeInsumo(created), { status: 201 });
   } catch (error) {
+    if (error instanceof UnauthorizedError) {
+      return unauthorizedResponse();
+    }
     if (hasPrismaErrorCode(error, "P2002")) {
       return NextResponse.json(
         { message: "Ya existe un insumo con ese nombre." },

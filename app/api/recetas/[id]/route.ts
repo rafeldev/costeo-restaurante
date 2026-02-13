@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { UnauthorizedError, requireAuthUser, unauthorizedResponse } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { hasPrismaErrorCode } from "@/lib/prisma-errors";
 import { decimalToNumber } from "@/lib/serializers";
@@ -43,26 +44,38 @@ function serializeReceta(receta: {
 
 export async function GET(_request: Request, context: RouteContext) {
   const { id } = await context.params;
-  const receta = await db.receta.findUnique({
-    where: { id },
-    include: {
-      ingredientes: {
-        include: { insumo: true },
-        orderBy: { createdAt: "asc" },
+  try {
+    const user = await requireAuthUser();
+    const receta = await db.receta.findFirst({
+      where: { id, ownerId: user.id },
+      include: {
+        ingredientes: {
+          include: { insumo: true },
+          orderBy: { createdAt: "asc" },
+        },
       },
-    },
-  });
+    });
 
-  if (!receta) {
-    return NextResponse.json({ message: "Receta no encontrada" }, { status: 404 });
+    if (!receta) {
+      return NextResponse.json({ message: "Receta no encontrada" }, { status: 404 });
+    }
+
+    return NextResponse.json(serializeReceta(receta));
+  } catch (error) {
+    if (error instanceof UnauthorizedError) {
+      return unauthorizedResponse();
+    }
+    return NextResponse.json(
+      { message: "No se pudo consultar la receta." },
+      { status: 500 },
+    );
   }
-
-  return NextResponse.json(serializeReceta(receta));
 }
 
 export async function PATCH(request: Request, context: RouteContext) {
   const { id } = await context.params;
   try {
+    const user = await requireAuthUser();
     const body = await request.json();
     const parsed = recetaSchema.safeParse({
       ...body,
@@ -81,6 +94,28 @@ export async function PATCH(request: Request, context: RouteContext) {
       return NextResponse.json(
         { message: "Datos inválidos", issues: parsed.error.flatten() },
         { status: 400 },
+      );
+    }
+
+    const existing = await db.receta.findFirst({
+      where: { id, ownerId: user.id },
+      select: { id: true },
+    });
+    if (!existing) {
+      return NextResponse.json({ message: "Receta no encontrada" }, { status: 404 });
+    }
+
+    const insumoIds = [...new Set(parsed.data.ingredientes.map((item) => item.insumoId))];
+    const ownedInsumos = await db.insumo.count({
+      where: {
+        ownerId: user.id,
+        id: { in: insumoIds },
+      },
+    });
+    if (ownedInsumos !== insumoIds.length) {
+      return NextResponse.json(
+        { message: "Uno o más insumos no pertenecen al usuario autenticado." },
+        { status: 403 },
       );
     }
 
@@ -111,6 +146,9 @@ export async function PATCH(request: Request, context: RouteContext) {
 
     return NextResponse.json(serializeReceta(updated));
   } catch (error) {
+    if (error instanceof UnauthorizedError) {
+      return unauthorizedResponse();
+    }
     if (hasPrismaErrorCode(error, "P2025")) {
       return NextResponse.json({ message: "Receta no encontrada" }, { status: 404 });
     }
@@ -125,9 +163,16 @@ export async function PATCH(request: Request, context: RouteContext) {
 export async function DELETE(_request: Request, context: RouteContext) {
   const { id } = await context.params;
   try {
-    await db.receta.delete({ where: { id } });
+    const user = await requireAuthUser();
+    const deleted = await db.receta.deleteMany({ where: { id, ownerId: user.id } });
+    if (deleted.count === 0) {
+      return NextResponse.json({ message: "Receta no encontrada" }, { status: 404 });
+    }
     return NextResponse.json({ ok: true });
   } catch (error) {
+    if (error instanceof UnauthorizedError) {
+      return unauthorizedResponse();
+    }
     if (hasPrismaErrorCode(error, "P2025")) {
       return NextResponse.json({ message: "Receta no encontrada" }, { status: 404 });
     }

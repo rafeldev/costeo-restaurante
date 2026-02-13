@@ -1,19 +1,39 @@
-import { PrismaClient, UnidadBase } from "@prisma/client";
-
-const prisma = new PrismaClient();
+import "dotenv/config";
+import { UnidadBase } from "@prisma/client";
+import bcrypt from "bcryptjs";
+import { db } from "../lib/db";
 
 async function main() {
-  const config = await prisma.configuracionCosteo.findFirst();
-  if (!config) {
-    await prisma.configuracionCosteo.create({
-      data: {
-        overheadPct: 15,
-        margenObjetivoPct: 40,
-        impuestoPct: 19,
-        redondeoPrecio: 100,
-      },
-    });
-  }
+  const ownerEmail = (process.env.SEED_OWNER_EMAIL ?? "owner@example.com").toLowerCase();
+  const ownerPassword = process.env.SEED_OWNER_PASSWORD ?? "changeme123";
+  const ownerPasswordHash = await bcrypt.hash(ownerPassword, 12);
+  const owner = await db.user.upsert({
+    where: { email: ownerEmail },
+    update: {
+      passwordHash: ownerPasswordHash,
+    },
+    create: {
+      email: ownerEmail,
+      passwordHash: ownerPasswordHash,
+    },
+  });
+
+  await db.configuracionCosteo.upsert({
+    where: { ownerId: owner.id },
+    update: {
+      overheadPct: 15,
+      margenObjetivoPct: 40,
+      impuestoPct: 19,
+      redondeoPrecio: 100,
+    },
+    create: {
+      ownerId: owner.id,
+      overheadPct: 15,
+      margenObjetivoPct: 40,
+      impuestoPct: 19,
+      redondeoPrecio: 100,
+    },
+  });
 
   const proveedoresBase = [
     { nombre: "Proveedor local", contacto: "proveedorlocal@example.com" },
@@ -23,9 +43,17 @@ async function main() {
   ];
 
   for (const proveedor of proveedoresBase) {
-    await prisma.proveedor.upsert({
-      where: { nombre: proveedor.nombre },
-      create: proveedor,
+    await db.proveedor.upsert({
+      where: {
+        ownerId_nombre: {
+          ownerId: owner.id,
+          nombre: proveedor.nombre,
+        },
+      },
+      create: {
+        ownerId: owner.id,
+        ...proveedor,
+      },
       update: { contacto: proveedor.contacto },
     });
   }
@@ -74,9 +102,17 @@ async function main() {
   ];
 
   for (const insumo of insumosBase) {
-    const upserted = await prisma.insumo.upsert({
-      where: { nombre: insumo.nombre },
-      create: insumo,
+    const upserted = await db.insumo.upsert({
+      where: {
+        ownerId_nombre: {
+          ownerId: owner.id,
+          nombre: insumo.nombre,
+        },
+      },
+      create: {
+        ownerId: owner.id,
+        ...insumo,
+      },
       update: {
         categoria: insumo.categoria,
         unidadBase: insumo.unidadBase,
@@ -86,20 +122,22 @@ async function main() {
       },
     });
 
-    await prisma.inventarioInsumo.upsert({
+    await db.inventarioInsumo.upsert({
       where: { insumoId: upserted.id },
       create: { insumoId: upserted.id, stockActual: 0, stockMinimo: 0 },
       update: {},
     });
   }
+
+  console.info(`Seed listo para usuario: ${ownerEmail}`);
 }
 
 main()
   .then(async () => {
-    await prisma.$disconnect();
+    await db.$disconnect();
   })
   .catch(async (error) => {
     console.error(error);
-    await prisma.$disconnect();
+    await db.$disconnect();
     process.exit(1);
   });

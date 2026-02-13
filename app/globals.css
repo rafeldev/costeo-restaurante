@@ -32,7 +32,8 @@ body {
   border: 1px solid var(--border);
   background: var(--surface);
   padding: 0.625rem 0.75rem;
-  font-size: 0.875rem;
+  /* iOS Safari auto-zooms focused inputs below 16px. */
+  font-size: 1rem;
   color: var(--foreground);
   transition: border-color 160ms ease, box-shadow 160ms ease;
 }

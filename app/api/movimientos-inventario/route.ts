@@ -1,5 +1,6 @@
 import { TipoMovimientoInventario, UnidadBase } from "@prisma/client";
 import { NextResponse } from "next/server";
+import { UnauthorizedError, requireAuthUser, unauthorizedResponse } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { registrarMovimientoInventario } from "@/lib/inventory";
 import { decimalToNumber } from "@/lib/serializers";
@@ -30,21 +31,36 @@ function serializeMovimiento(movimiento: {
 }
 
 export async function GET() {
-  const movimientos = await db.movimientoInventario.findMany({
-    include: {
-      insumo: {
-        select: { id: true, nombre: true, unidadBase: true },
+  try {
+    const user = await requireAuthUser();
+    const movimientos = await db.movimientoInventario.findMany({
+      where: {
+        insumo: { ownerId: user.id },
       },
-    },
-    orderBy: { fechaMovimiento: "desc" },
-    take: 150,
-  });
+      include: {
+        insumo: {
+          select: { id: true, nombre: true, unidadBase: true },
+        },
+      },
+      orderBy: { fechaMovimiento: "desc" },
+      take: 150,
+    });
 
-  return NextResponse.json(movimientos.map(serializeMovimiento));
+    return NextResponse.json(movimientos.map(serializeMovimiento));
+  } catch (error) {
+    if (error instanceof UnauthorizedError) {
+      return unauthorizedResponse();
+    }
+    return NextResponse.json(
+      { message: "No se pudo consultar movimientos." },
+      { status: 500 },
+    );
+  }
 }
 
 export async function POST(request: Request) {
   try {
+    const user = await requireAuthUser();
     const body = await request.json();
     const parsed = movimientoInventarioSchema.safeParse({
       ...body,
@@ -59,6 +75,7 @@ export async function POST(request: Request) {
     }
 
     const result = await registrarMovimientoInventario({
+      ownerId: user.id,
       insumoId: parsed.data.insumoId,
       tipo: parsed.data.tipo,
       cantidad: parsed.data.cantidad,
@@ -70,6 +87,9 @@ export async function POST(request: Request) {
 
     return NextResponse.json(result, { status: 201 });
   } catch (error) {
+    if (error instanceof UnauthorizedError) {
+      return unauthorizedResponse();
+    }
     if (error instanceof Error) {
       return NextResponse.json({ message: error.message }, { status: 400 });
     }

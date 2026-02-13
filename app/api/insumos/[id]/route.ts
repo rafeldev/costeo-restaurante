@@ -1,5 +1,6 @@
 import { UnidadBase } from "@prisma/client";
 import { NextResponse } from "next/server";
+import { UnauthorizedError, requireAuthUser, unauthorizedResponse } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { hasPrismaErrorCode } from "@/lib/prisma-errors";
 import { decimalToNumber } from "@/lib/serializers";
@@ -15,6 +16,7 @@ export async function PATCH(request: Request, context: RouteContext) {
   const { id } = await context.params;
 
   try {
+    const user = await requireAuthUser();
     const body = await request.json();
     const parsed = insumoSchema.partial().safeParse({
       ...body,
@@ -27,6 +29,14 @@ export async function PATCH(request: Request, context: RouteContext) {
         { message: "Datos inválidos", issues: parsed.error.flatten() },
         { status: 400 },
       );
+    }
+
+    const existing = await db.insumo.findFirst({
+      where: { id, ownerId: user.id },
+      select: { id: true },
+    });
+    if (!existing) {
+      return NextResponse.json({ message: "Insumo no encontrado" }, { status: 404 });
     }
 
     const updated = await db.insumo.update({
@@ -50,6 +60,9 @@ export async function PATCH(request: Request, context: RouteContext) {
       mermaPct: decimalToNumber(updated.mermaPct),
     });
   } catch (error) {
+    if (error instanceof UnauthorizedError) {
+      return unauthorizedResponse();
+    }
     if (hasPrismaErrorCode(error, "P2025")) {
       return NextResponse.json({ message: "Insumo no encontrado" }, { status: 404 });
     }
@@ -70,9 +83,16 @@ export async function PATCH(request: Request, context: RouteContext) {
 export async function DELETE(_request: Request, context: RouteContext) {
   const { id } = await context.params;
   try {
-    await db.insumo.delete({ where: { id } });
+    const user = await requireAuthUser();
+    const deleted = await db.insumo.deleteMany({ where: { id, ownerId: user.id } });
+    if (deleted.count === 0) {
+      return NextResponse.json({ message: "Insumo no encontrado" }, { status: 404 });
+    }
     return NextResponse.json({ ok: true });
   } catch (error) {
+    if (error instanceof UnauthorizedError) {
+      return unauthorizedResponse();
+    }
     if (hasPrismaErrorCode(error, "P2025")) {
       return NextResponse.json({ message: "Insumo no encontrado" }, { status: 404 });
     }

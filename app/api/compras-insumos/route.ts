@@ -1,5 +1,6 @@
 import { UnidadBase } from "@prisma/client";
 import { NextResponse } from "next/server";
+import { UnauthorizedError, requireAuthUser, unauthorizedResponse } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { registrarCompraInsumo } from "@/lib/inventory";
 import { decimalToNumber } from "@/lib/serializers";
@@ -30,23 +31,38 @@ function serializeCompra(compra: {
 }
 
 export async function GET() {
-  const compras = await db.compraInsumo.findMany({
-    include: {
-      insumo: {
-        select: { id: true, nombre: true, unidadBase: true },
+  try {
+    const user = await requireAuthUser();
+    const compras = await db.compraInsumo.findMany({
+      where: {
+        insumo: { ownerId: user.id },
       },
-      proveedor: {
-        select: { id: true, nombre: true },
+      include: {
+        insumo: {
+          select: { id: true, nombre: true, unidadBase: true },
+        },
+        proveedor: {
+          select: { id: true, nombre: true },
+        },
       },
-    },
-    orderBy: { fechaCompra: "desc" },
-  });
+      orderBy: { fechaCompra: "desc" },
+    });
 
-  return NextResponse.json(compras.map(serializeCompra));
+    return NextResponse.json(compras.map(serializeCompra));
+  } catch (error) {
+    if (error instanceof UnauthorizedError) {
+      return unauthorizedResponse();
+    }
+    return NextResponse.json(
+      { message: "No se pudo consultar compras." },
+      { status: 500 },
+    );
+  }
 }
 
 export async function POST(request: Request) {
   try {
+    const user = await requireAuthUser();
     const body = await request.json();
     const parsed = compraInsumoSchema.safeParse({
       ...body,
@@ -62,6 +78,7 @@ export async function POST(request: Request) {
     }
 
     const result = await registrarCompraInsumo({
+      ownerId: user.id,
       insumoId: parsed.data.insumoId,
       proveedorId: parsed.data.proveedorId ?? null,
       fechaCompra: parsed.data.fechaCompra ? new Date(parsed.data.fechaCompra) : undefined,
@@ -70,8 +87,8 @@ export async function POST(request: Request) {
       precioTotal: parsed.data.precioTotal,
     });
 
-    const compra = await db.compraInsumo.findUnique({
-      where: { id: result.compra.id },
+    const compra = await db.compraInsumo.findFirst({
+      where: { id: result.compra.id, insumo: { ownerId: user.id } },
       include: {
         insumo: {
           select: { id: true, nombre: true, unidadBase: true },
@@ -91,6 +108,9 @@ export async function POST(request: Request) {
 
     return NextResponse.json(serializeCompra(compra), { status: 201 });
   } catch (error) {
+    if (error instanceof UnauthorizedError) {
+      return unauthorizedResponse();
+    }
     if (error instanceof Error) {
       return NextResponse.json({ message: error.message }, { status: 400 });
     }

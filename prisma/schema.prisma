@@ -28,7 +28,8 @@ enum TipoMovimientoInventario {
 
 model Insumo {
   id           String              @id @default(cuid())
-  nombre       String              @unique
+  ownerId      String
+  nombre       String
   categoria    String
   unidadBase   UnidadBase
   costoUnidad  Decimal             @db.Decimal(12, 4)
@@ -36,14 +37,19 @@ model Insumo {
   proveedor    String?
   createdAt    DateTime            @default(now())
   updatedAt    DateTime            @updatedAt
+  owner        User                @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   recetaInsumos RecetaInsumo[]
   compras      CompraInsumo[]
   movimientos  MovimientoInventario[]
   inventario   InventarioInsumo?
+
+  @@unique([ownerId, nombre])
+  @@index([ownerId])
 }
 
 model Receta {
   id                String         @id @default(cuid())
+  ownerId           String
   nombre            String
   tipoProducto      String
   rendimientoPorciones Int
@@ -51,7 +57,10 @@ model Receta {
   precioVentaActual Decimal?       @db.Decimal(12, 2)
   createdAt         DateTime       @default(now())
   updatedAt         DateTime       @updatedAt
+  owner             User           @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   ingredientes      RecetaInsumo[]
+
+  @@index([ownerId])
 }
 
 model RecetaInsumo {
@@ -69,21 +78,28 @@ model RecetaInsumo {
 
 model ConfiguracionCosteo {
   id               String   @id @default(cuid())
+  ownerId          String   @unique
   overheadPct      Decimal  @default(10) @db.Decimal(5, 2)
   margenObjetivoPct Decimal @default(35) @db.Decimal(5, 2)
   impuestoPct      Decimal  @default(0) @db.Decimal(5, 2)
   redondeoPrecio   Decimal  @default(100) @db.Decimal(8, 2)
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
+  owner            User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
 }
 
 model Proveedor {
   id        String        @id @default(cuid())
-  nombre    String        @unique
+  ownerId   String
+  nombre    String
   contacto  String?
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
+  owner     User          @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   compras   CompraInsumo[]
+
+  @@unique([ownerId, nombre])
+  @@index([ownerId])
 }
 
 model CompraInsumo {
@@ -128,4 +144,16 @@ model MovimientoInventario {
 
   @@index([insumoId, fechaMovimiento])
   @@index([tipo, fechaMovimiento])
+}
+
+model User {
+  id                   String               @id @default(cuid())
+  email                String               @unique
+  passwordHash         String
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+  insumos              Insumo[]
+  recetas              Receta[]
+  configuracionesCosteo ConfiguracionCosteo[]
+  proveedores          Proveedor[]
 }

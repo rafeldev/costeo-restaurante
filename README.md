@@ -29,6 +29,10 @@ npm install
 
 ```bash
 DATABASE_URL="postgresql://usuario:password@localhost:5432/restaurante?schema=public"
+AUTH_SECRET="reemplazar-con-una-clave-larga-y-segura"
+AUTH_TRUST_HOST="true"
+SEED_OWNER_EMAIL="owner@example.com"
+SEED_OWNER_PASSWORD="changeme123"
 ```
 
 3. Genera cliente Prisma y migra:
@@ -57,7 +61,8 @@ npm run dev
 - `npm run test`: ejecuta pruebas unitarias.
 - `npm run db:generate`: genera Prisma Client.
 - `npm run db:migrate`: crea/aplica migraciones.
-- `npm run db:seed`: inserta configuración e insumos base.
+- `npm run db:seed`: inserta usuario inicial, configuración e insumos base.
+- `npm run user:create -- --email=usuario@dominio.com --password=secreto123`: crea/actualiza credenciales de acceso.
 
 ## Deploy sugerido (Vercel + Neon/Supabase)
 
