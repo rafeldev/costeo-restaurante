@@ -166,3 +166,82 @@ export async function registrarMovimientoInventario(payload: {
     };
   });
 }
+
+export async function registrarProduccionReceta(payload: {
+  ownerId: string;
+  recetaId: string;
+  unidades: number;
+  fechaProduccion?: Date;
+}) {
+  return db.$transaction(async (tx) => {
+    const receta = await tx.receta.findFirst({
+      where: { id: payload.recetaId, ownerId: payload.ownerId },
+      include: {
+        ingredientes: {
+          include: { insumo: true },
+          orderBy: { createdAt: "asc" },
+        },
+      },
+    });
+
+    if (!receta) {
+      throw new Error("Receta no encontrada");
+    }
+    if (receta.ingredientes.length === 0) {
+      throw new Error("La receta no tiene ingredientes para producir");
+    }
+
+    const fechaMovimiento = payload.fechaProduccion ?? new Date();
+    const consumos: Array<{
+      insumoId: string;
+      nombre: string;
+      cantidadDescontada: number;
+      stockActual: number;
+      stockMinimo: number;
+    }> = [];
+
+    for (const item of receta.ingredientes) {
+      if (item.insumo.ownerId !== payload.ownerId) {
+        throw new Error("Ingrediente fuera del alcance del usuario");
+      }
+
+      const cantidadBase = decimalToNumber(item.cantidad);
+      const mermaPct = decimalToNumber(item.insumo.mermaPct);
+      const factorMerma = 1 + mermaPct / 100;
+      const cantidadDescontada = cantidadBase * payload.unidades * factorMerma;
+
+      const inventario = await ensureInventarioInsumo(item.insumoId, tx);
+      const nextStock = decimalToNumber(inventario.stockActual) - cantidadDescontada;
+      const updatedInventario = await tx.inventarioInsumo.update({
+        where: { insumoId: item.insumoId },
+        data: { stockActual: nextStock },
+      });
+
+      await tx.movimientoInventario.create({
+        data: {
+          insumoId: item.insumoId,
+          tipo: "SALIDA",
+          cantidad: cantidadDescontada,
+          motivo: `Producción receta ${receta.nombre} x${payload.unidades}`,
+          fechaMovimiento,
+        },
+      });
+
+      consumos.push({
+        insumoId: item.insumoId,
+        nombre: item.insumo.nombre,
+        cantidadDescontada,
+        stockActual: decimalToNumber(updatedInventario.stockActual),
+        stockMinimo: decimalToNumber(updatedInventario.stockMinimo),
+      });
+    }
+
+    return {
+      recetaId: receta.id,
+      recetaNombre: receta.nombre,
+      unidades: payload.unidades,
+      fechaMovimiento,
+      consumos,
+    };
+  });
+}

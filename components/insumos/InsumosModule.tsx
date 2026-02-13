@@ -15,6 +15,7 @@ import { formatMoney } from "@/lib/format";
 import { calculateUnitCostFromPurchase } from "@/lib/unit-conversion";
 import { insumoSchema } from "@/lib/validation";
 import { Field } from "@/components/ui/Field";
+import { toast } from "sonner";
 
 type FormValues = z.input<typeof insumoSchema>;
 
@@ -92,6 +93,7 @@ export function InsumosModule() {
     setUnidadCompra("KILOGRAMO");
     setCalcError(null);
     await loadInsumos();
+    toast.success(editingId ? "Insumo actualizado" : "Insumo creado");
   }
 
   async function onDelete(id: string) {
@@ -101,10 +103,11 @@ export function InsumosModule() {
     const response = await fetch(`/api/insumos/${id}`, { method: "DELETE" });
     if (!response.ok) {
       const body = await response.json().catch(() => ({}));
-      alert(body.message ?? "No se pudo eliminar");
+      toast.error(body.message ?? "No se pudo eliminar");
       return;
     }
     await loadInsumos();
+    toast.success("Insumo eliminado");
   }
 
   function startEdit(insumo: InsumoDTO) {
@@ -152,7 +155,7 @@ export function InsumosModule() {
             try {
               await onSubmit(values);
             } catch (err) {
-              alert(err instanceof Error ? err.message : "Error inesperado");
+              toast.error(err instanceof Error ? err.message : "Error inesperado");
             }
           })}
         >

@@ -8,6 +8,7 @@ import { unidadBaseShort } from "@/lib/domain";
 import { formatMoney, formatPercent } from "@/lib/format";
 import { recetaSchema } from "@/lib/validation";
 import { Field } from "@/components/ui/Field";
+import { toast } from "sonner";
 
 type Props = {
   recetaId: string;
@@ -29,6 +30,8 @@ export function RecetaDetalleModule({ recetaId }: Props) {
   const [insumos, setInsumos] = useState<InsumoDTO[]>([]);
   const [costeo, setCosteo] = useState<CosteoDTO | null>(null);
   const [loading, setLoading] = useState(true);
+  const [unidadesProduccion, setUnidadesProduccion] = useState(1);
+  const [isProducing, setIsProducing] = useState(false);
 
   const {
     register,
@@ -89,7 +92,7 @@ export function RecetaDetalleModule({ recetaId }: Props) {
           })) ?? [{ insumoId: "", cantidad: 1 }],
       });
     } catch (error) {
-      alert(error instanceof Error ? error.message : "Error inesperado");
+      toast.error(error instanceof Error ? error.message : "Error inesperado");
     } finally {
       setLoading(false);
     }
@@ -110,6 +113,34 @@ export function RecetaDetalleModule({ recetaId }: Props) {
       throw new Error(body.message ?? "No se pudo actualizar la receta");
     }
     await loadData();
+    toast.success("Receta actualizada");
+  }
+
+  async function registrarProduccion() {
+    if (!Number.isInteger(unidadesProduccion) || unidadesProduccion <= 0) {
+      toast.error("Las unidades producidas deben ser un número entero mayor a cero");
+      return;
+    }
+
+    setIsProducing(true);
+    try {
+      const response = await fetch(`/api/recetas/${recetaId}/producir`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ unidades: unidadesProduccion }),
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.message ?? "No se pudo registrar la producción");
+      }
+
+      toast.success("Producción registrada y stock actualizado");
+      await loadData();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Error inesperado");
+    } finally {
+      setIsProducing(false);
+    }
   }
 
   if (loading) {
@@ -126,7 +157,7 @@ export function RecetaDetalleModule({ recetaId }: Props) {
             try {
               await onSubmit(values);
             } catch (error) {
-              alert(error instanceof Error ? error.message : "Error inesperado");
+              toast.error(error instanceof Error ? error.message : "Error inesperado");
             }
           })}
         >
@@ -261,6 +292,37 @@ export function RecetaDetalleModule({ recetaId }: Props) {
           ) : (
             <p className="mt-2 text-sm text-slate-600">No hay datos de costeo.</p>
           )}
+        </article>
+
+        <article className="surface-card p-4 sm:p-5">
+          <h3 className="text-base font-semibold text-slate-900">Registrar producción</h3>
+          <p className="mt-1 text-sm text-slate-600">
+            Descuenta insumos del inventario según ingredientes y merma de esta receta.
+          </p>
+          <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-end">
+            <label className="block flex-1 text-sm">
+              <span className="mb-1 block text-slate-700">Unidades producidas</span>
+              <input
+                className="input"
+                type="number"
+                min="1"
+                step="1"
+                value={unidadesProduccion}
+                onChange={(event) => setUnidadesProduccion(Number(event.target.value))}
+              />
+            </label>
+            <button
+              type="button"
+              className="btn-primary inline-flex items-center justify-center disabled:opacity-50"
+              onClick={() => void registrarProduccion()}
+              disabled={isProducing}
+            >
+              {isProducing ? "Registrando..." : "Registrar producción"}
+            </button>
+          </div>
+          <p className="mt-2 text-xs text-slate-500">
+            Si no alcanza stock, la operación se permite y puede dejar saldos negativos.
+          </p>
         </article>
 
         <article className="surface-card p-4 sm:p-5">

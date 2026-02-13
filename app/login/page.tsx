@@ -3,6 +3,7 @@
 import { FormEvent, Suspense, useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { toast } from "sonner";
 
 function LoginForm() {
   const router = useRouter();
@@ -28,9 +29,13 @@ function LoginForm() {
     setLoading(false);
     if (result?.error) {
       setError("Credenciales invalidas");
+      toast.error("No fue posible iniciar sesión", {
+        description: "Verifica tu correo y contraseña.",
+      });
       return;
     }
 
+    toast.success("Sesión iniciada");
     router.push(callbackUrl);
     router.refresh();
   }

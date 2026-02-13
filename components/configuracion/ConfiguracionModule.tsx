@@ -7,6 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import type { ConfigCosteoDTO } from "@/lib/api-types";
 import { configuracionCosteoSchema } from "@/lib/validation";
 import { Field } from "@/components/ui/Field";
+import { toast } from "sonner";
 
 type FormValues = {
   overheadPct: number;
@@ -47,7 +48,7 @@ export function ConfiguracionModule() {
 
   useEffect(() => {
     void loadConfig().catch((error) => {
-      alert(error instanceof Error ? error.message : "Error inesperado");
+      toast.error(error instanceof Error ? error.message : "Error inesperado");
     });
   }, [loadConfig]);
 
@@ -73,9 +74,9 @@ export function ConfiguracionModule() {
         onSubmit={handleSubmit(async (values) => {
           try {
             await onSubmit(values);
-            alert("Configuración guardada");
+            toast.success("Configuración guardada");
           } catch (error) {
-            alert(error instanceof Error ? error.message : "Error inesperado");
+            toast.error(error instanceof Error ? error.message : "Error inesperado");
           }
         })}
       >

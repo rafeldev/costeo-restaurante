@@ -9,6 +9,7 @@ import { Field } from "@/components/ui/Field";
 import { unidadBaseLabels, unidadBaseValues } from "@/lib/domain";
 import { formatMoney } from "@/lib/format";
 import { compraInsumoSchema } from "@/lib/validation";
+import { toast } from "sonner";
 
 type FormValues = z.input<typeof compraInsumoSchema>;
 
@@ -74,7 +75,7 @@ export function ComprasInsumosModule() {
       })
       .catch((error) => {
         if (!cancelled) {
-          alert(error instanceof Error ? error.message : "Error inesperado");
+          toast.error(error instanceof Error ? error.message : "Error inesperado");
         }
       });
 
@@ -98,6 +99,7 @@ export function ComprasInsumosModule() {
     }
     reset(defaultValues);
     await loadData();
+    toast.success("Compra registrada");
   }
 
   async function crearProveedor() {
@@ -114,6 +116,7 @@ export function ComprasInsumosModule() {
     }
     setNuevoProveedor("");
     await loadData();
+    toast.success("Proveedor creado");
   }
 
   const comprasFiltradas = useMemo(() => {
@@ -134,7 +137,7 @@ export function ComprasInsumosModule() {
             try {
               await onSubmit(values);
             } catch (error) {
-              alert(error instanceof Error ? error.message : "Error inesperado");
+              toast.error(error instanceof Error ? error.message : "Error inesperado");
             }
           })}
         >
@@ -172,7 +175,7 @@ export function ComprasInsumosModule() {
                 className="btn-secondary"
                 onClick={() =>
                   void crearProveedor().catch((error) => {
-                    alert(error instanceof Error ? error.message : "Error inesperado");
+                    toast.error(error instanceof Error ? error.message : "Error inesperado");
                   })
                 }
               >

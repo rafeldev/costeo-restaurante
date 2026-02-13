@@ -8,6 +8,7 @@ import type { InsumoDTO, MovimientoInventarioDTO } from "@/lib/api-types";
 import { Field } from "@/components/ui/Field";
 import { tipoMovimientoLabels, tipoMovimientoValues, unidadBaseShort } from "@/lib/domain";
 import { movimientoInventarioSchema } from "@/lib/validation";
+import { toast } from "sonner";
 
 type MovimientoFormValues = z.input<typeof movimientoInventarioSchema>;
 
@@ -80,7 +81,7 @@ export function InventarioModule() {
       })
       .catch((error) => {
         if (!cancelled) {
-          alert(error instanceof Error ? error.message : "Error inesperado");
+          toast.error(error instanceof Error ? error.message : "Error inesperado");
         }
       });
 
@@ -103,8 +104,9 @@ export function InventarioModule() {
         throw new Error(body.message ?? "No se pudo actualizar stock mínimo");
       }
       await loadData();
+      toast.success("Stock mínimo actualizado");
     } catch (error) {
-      alert(error instanceof Error ? error.message : "Error inesperado");
+      toast.error(error instanceof Error ? error.message : "Error inesperado");
     } finally {
       setGuardandoMinimo(null);
     }
@@ -122,6 +124,7 @@ export function InventarioModule() {
     }
     reset(movimientoDefaults);
     await loadData();
+    toast.success("Movimiento registrado");
   }
 
   const totalAlertas = useMemo(
@@ -145,7 +148,7 @@ export function InventarioModule() {
             try {
               await onSubmitMovimiento(values);
             } catch (error) {
-              alert(error instanceof Error ? error.message : "Error inesperado");
+              toast.error(error instanceof Error ? error.message : "Error inesperado");
             }
           })}
         >

@@ -9,6 +9,7 @@ import { unidadBaseShort } from "@/lib/domain";
 import { formatMoney } from "@/lib/format";
 import { recetaSchema } from "@/lib/validation";
 import { Field } from "@/components/ui/Field";
+import { toast } from "sonner";
 
 type RecipeFormValues = {
   nombre: string;
@@ -75,7 +76,7 @@ export function RecetasModule() {
       setInsumos(insumosData);
       setRecetas(recetasData);
     } catch (error) {
-      alert(error instanceof Error ? error.message : "Error inesperado");
+      toast.error(error instanceof Error ? error.message : "Error inesperado");
     } finally {
       setLoading(false);
     }
@@ -120,6 +121,7 @@ export function RecetasModule() {
 
     reset(defaultValues);
     await loadData();
+    toast.success("Receta creada");
   }
 
   async function deleteReceta(id: string) {
@@ -129,10 +131,11 @@ export function RecetasModule() {
     const response = await fetch(`/api/recetas/${id}`, { method: "DELETE" });
     if (!response.ok) {
       const body = await response.json().catch(() => ({}));
-      alert(body.message ?? "No se pudo eliminar");
+      toast.error(body.message ?? "No se pudo eliminar");
       return;
     }
     await loadData();
+    toast.success("Receta eliminada");
   }
 
   return (
@@ -148,7 +151,7 @@ export function RecetasModule() {
             try {
               await onSubmit(values);
             } catch (error) {
-              alert(error instanceof Error ? error.message : "Error inesperado");
+              toast.error(error instanceof Error ? error.message : "Error inesperado");
             }
           })}
         >

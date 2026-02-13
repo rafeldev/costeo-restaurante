@@ -59,6 +59,11 @@ export const movimientoInventarioSchema = z.object({
   fechaMovimiento: z.string().min(1).optional(),
 });
 
+export const producirRecetaSchema = z.object({
+  unidades: z.number().int().positive(),
+  fechaProduccion: z.string().min(1).optional(),
+});
+
 export function parseNumberInput(value: unknown): number | undefined {
   if (value === "" || value === null || value === undefined) {
     return undefined;
