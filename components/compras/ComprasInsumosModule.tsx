@@ -130,7 +130,7 @@ export function ComprasInsumosModule() {
   return (
     <div className="grid grid-cols-1 gap-4 xl:grid-cols-[380px_1fr] xl:gap-6">
       <section className="surface-card p-4 sm:p-5">
-        <h2 className="text-base font-semibold text-slate-900 sm:text-lg">Registrar compra</h2>
+        <h2 className="text-base font-semibold text-primary sm:text-lg">Registrar compra</h2>
         <form
           className="mt-4 space-y-3.5"
           onSubmit={handleSubmit(async (values) => {
@@ -161,8 +161,8 @@ export function ComprasInsumosModule() {
               ))}
             </select>
           </Field>
-          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-            <p className="mb-2 text-xs font-medium text-slate-700">Crear proveedor rápido</p>
+          <div className="rounded-lg border border-[var(--border)] bg-[var(--parchment)] p-3">
+            <p className="mb-2 text-xs font-medium text-primary">Crear proveedor rápido</p>
             <div className="flex gap-2">
               <input
                 className="input h-10"
@@ -222,7 +222,7 @@ export function ComprasInsumosModule() {
       <section className="surface-card p-4 sm:p-5">
         <div className="mb-4 flex flex-wrap items-end gap-2">
           <div className="min-w-48 flex-1">
-            <label className="mb-1 block text-xs font-medium text-slate-600">Filtrar por insumo</label>
+            <label className="mb-1 block text-xs font-medium text-secondary">Filtrar por insumo</label>
             <select className="input" value={filtroInsumo} onChange={(event) => setFiltroInsumo(event.target.value)}>
               <option value="">Todos</option>
               {insumos.map((insumo) => (
@@ -233,7 +233,7 @@ export function ComprasInsumosModule() {
             </select>
           </div>
           <div className="min-w-48 flex-1">
-            <label className="mb-1 block text-xs font-medium text-slate-600">Filtrar por proveedor</label>
+            <label className="mb-1 block text-xs font-medium text-secondary">Filtrar por proveedor</label>
             <select className="input" value={filtroProveedor} onChange={(event) => setFiltroProveedor(event.target.value)}>
               <option value="">Todos</option>
               {proveedores.map((proveedor) => (
@@ -244,26 +244,26 @@ export function ComprasInsumosModule() {
             </select>
           </div>
         </div>
-        <h2 className="text-base font-semibold text-slate-900 sm:text-lg">Historial de compras</h2>
-        <p className="mt-1 text-sm text-slate-600">{comprasFiltradas.length} compras registradas</p>
+        <h2 className="text-base font-semibold text-primary sm:text-lg">Historial de compras</h2>
+        <p className="mt-1 text-sm text-secondary">{comprasFiltradas.length} compras registradas</p>
         <div className="mt-3 space-y-2">
           {comprasFiltradas.map((compra) => (
-            <article key={compra.id} className="rounded-lg border border-slate-200 p-3">
-              <p className="font-medium text-slate-800">
+            <article key={compra.id} className="rounded-lg border border-[var(--border)] p-3">
+              <p className="font-medium text-primary">
                 {compra.insumo?.nombre} · {new Date(compra.fechaCompra).toLocaleString("es-CO")}
               </p>
-              <p className="mt-1 text-sm text-slate-600">
+              <p className="mt-1 text-sm text-secondary">
                 Proveedor: {compra.proveedor?.nombre ?? "Sin proveedor"} · Cantidad:{" "}
                 {compra.cantidadCompra.toFixed(2)} {unidadBaseLabels[compra.unidadCompra]}
               </p>
-              <p className="mt-1 text-sm text-slate-700">
+              <p className="mt-1 text-sm text-primary">
                 Precio total: {formatMoney(compra.precioTotal)} · Costo unitario calculado:{" "}
                 {formatMoney(compra.costoUnitarioCalculado)}
               </p>
             </article>
           ))}
           {comprasFiltradas.length === 0 ? (
-            <p className="text-sm text-slate-500">Sin compras para los filtros seleccionados.</p>
+            <p className="text-sm text-muted">Sin compras para los filtros seleccionados.</p>
           ) : null}
         </div>
       </section>

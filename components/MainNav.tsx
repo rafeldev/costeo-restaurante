@@ -20,10 +20,10 @@ export function MainNav() {
     (userEmail ? userEmail.split("@")[0] : "Usuario");
 
   return (
-    <nav className="mb-6 sm:mb-8">
-      <div className="surface-card p-1.5 sm:p-2">
+    <nav className="mb-6 sm:mb-8" aria-label="Navegación principal">
+      <div className="rounded-xl border border-[var(--border)] bg-[var(--paper)] p-1.5 shadow-sm sm:p-2">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+          <div className="flex gap-1 overflow-x-auto pb-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
             {navItems.map((item) => {
               const isActive =
                 item.href === "/"
@@ -35,9 +35,10 @@ export function MainNav() {
                   href={item.href}
                   className={`inline-flex min-h-11 shrink-0 items-center rounded-lg px-3 text-sm font-medium transition ${
                     isActive
-                      ? "bg-slate-900 text-white"
-                      : "text-slate-700 hover:bg-slate-100"
+                      ? "bg-[var(--ink)] text-white"
+                      : "text-secondary hover:bg-[var(--border-subtle)] hover:text-primary"
                   }`}
+                  aria-current={isActive ? "page" : undefined}
                 >
                   {item.label}
                 </Link>
@@ -45,9 +46,9 @@ export function MainNav() {
             })}
           </div>
 
-          <div className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-2 py-1 sm:justify-end">
-            <p className="truncate text-xs text-slate-600 sm:max-w-[200px]">
-              Sesión: <span className="font-medium text-slate-800">{userName}</span>
+          <div className="flex items-center justify-between gap-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--parchment)] px-2 py-1 sm:justify-end">
+            <p className="truncate text-xs text-secondary sm:max-w-[200px]">
+              Sesión: <span className="font-medium text-primary">{userName}</span>
             </p>
             <button
               type="button"

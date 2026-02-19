@@ -141,7 +141,7 @@ export function InventarioModule() {
   return (
     <div className="grid grid-cols-1 gap-4 xl:grid-cols-[380px_1fr] xl:gap-6">
       <section className="surface-card p-4 sm:p-5">
-        <h2 className="text-base font-semibold text-slate-900 sm:text-lg">Movimiento manual</h2>
+        <h2 className="text-base font-semibold text-primary sm:text-lg">Movimiento manual</h2>
         <form
           className="mt-4 space-y-3.5"
           onSubmit={handleSubmit(async (values) => {
@@ -194,8 +194,8 @@ export function InventarioModule() {
 
       <section className="space-y-4">
         <article className="surface-card p-4 sm:p-5">
-          <h2 className="text-base font-semibold text-slate-900 sm:text-lg">Stock por insumo</h2>
-          <p className="mt-1 text-sm text-slate-600">
+          <h2 className="text-base font-semibold text-primary sm:text-lg">Stock por insumo</h2>
+          <p className="mt-1 text-sm text-secondary">
             {insumos.length} insumos · {totalAlertas} alertas activas
           </p>
           <div className="mt-3 space-y-2">
@@ -206,16 +206,16 @@ export function InventarioModule() {
               return (
                 <div
                   key={insumo.id}
-                  className="grid grid-cols-1 gap-2 rounded-lg border border-slate-200 p-3 lg:grid-cols-[1fr_auto]"
+                  className="grid grid-cols-1 gap-2 rounded-lg border border-[var(--border)] p-3 lg:grid-cols-[1fr_auto]"
                 >
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
-                      <p className="font-medium text-slate-800">{insumo.nombre}</p>
+                      <p className="font-medium text-primary">{insumo.nombre}</p>
                       <span className={`rounded-full px-2 py-0.5 text-xs ${badgeStyles[estado]}`}>
                         {estado}
                       </span>
                     </div>
-                    <p className="mt-1 text-sm text-slate-600">
+                    <p className="mt-1 text-sm text-secondary">
                       Stock: {stockActual.toFixed(2)} {unidadBaseShort[insumo.unidadBase]} ·
                       Mínimo: {stockMinimo.toFixed(2)} {unidadBaseShort[insumo.unidadBase]}
                     </p>
@@ -250,25 +250,25 @@ export function InventarioModule() {
         </article>
 
         <article className="surface-card p-4 sm:p-5">
-          <h3 className="text-base font-semibold text-slate-900">Últimos movimientos</h3>
+          <h3 className="text-base font-semibold text-primary">Últimos movimientos</h3>
           <div className="mt-3 space-y-2">
             {movimientos.slice(0, 20).map((movimiento) => (
-              <div key={movimiento.id} className="rounded-lg border border-slate-200 p-3">
-                <p className="font-medium text-slate-800">
+              <div key={movimiento.id} className="rounded-lg border border-[var(--border)] p-3">
+                <p className="font-medium text-primary">
                   {movimiento.insumo?.nombre} · {tipoMovimientoLabels[movimiento.tipo]}
                 </p>
-                <p className="mt-1 text-sm text-slate-600">
+                <p className="mt-1 text-sm text-secondary">
                   Cantidad: {movimiento.cantidad.toFixed(2)}{" "}
                   {movimiento.insumo ? unidadBaseShort[movimiento.insumo.unidadBase] : ""}
                   {" "}· {new Date(movimiento.fechaMovimiento).toLocaleString("es-CO")}
                 </p>
                 {movimiento.motivo ? (
-                  <p className="mt-1 text-xs text-slate-500">Motivo: {movimiento.motivo}</p>
+                  <p className="mt-1 text-xs text-muted">Motivo: {movimiento.motivo}</p>
                 ) : null}
               </div>
             ))}
             {movimientos.length === 0 ? (
-              <p className="text-sm text-slate-500">Aún no hay movimientos registrados.</p>
+              <p className="text-sm text-muted">Aún no hay movimientos registrados.</p>
             ) : null}
           </div>
         </article>

@@ -1,19 +1,50 @@
-import { ReactNode } from "react";
+import { cloneElement, useId, type ReactElement, type ReactNode } from "react";
 
 type FieldProps = {
   label: string;
   error?: string;
   hint?: string;
+  id?: string;
   children: ReactNode;
 };
 
-export function Field({ label, error, hint, children }: FieldProps) {
+export function Field({ label, error, hint, id: idProp, children }: FieldProps) {
+  const generatedId = useId();
+  const id = idProp ?? generatedId;
+  const hintId = `${id}-hint`;
+  const errorId = `${id}-error`;
+  const describedBy = [hint ? hintId : null, error ? errorId : null]
+    .filter(Boolean)
+    .join(" ");
+
+  const child =
+    typeof children === "object" &&
+    children !== null &&
+    "type" in children &&
+    typeof (children as ReactElement).type === "string"
+      ? cloneElement(children as ReactElement<{ id?: string; "aria-describedby"?: string; "aria-invalid"?: boolean }>, {
+          id,
+          "aria-describedby": describedBy || undefined,
+          "aria-invalid": !!error,
+        })
+      : children;
+
   return (
-    <label className="block text-sm">
-      <span className="mb-1.5 block font-medium text-slate-700">{label}</span>
-      {children}
-      {hint ? <span className="mt-1 block text-xs text-slate-500">{hint}</span> : null}
-      {error ? <span className="mt-1 block text-xs font-medium text-red-600">{error}</span> : null}
-    </label>
+    <div className="block text-sm">
+      <label htmlFor={id} className="mb-1.5 block font-medium text-primary">
+        {label}
+      </label>
+      {child}
+      {hint ? (
+        <span id={hintId} className="mt-1 block text-xs text-muted">
+          {hint}
+        </span>
+      ) : null}
+      {error ? (
+        <span id={errorId} className="mt-1 block text-xs font-medium text-[var(--danger-text)]" role="alert">
+          {error}
+        </span>
+      ) : null}
+    </div>
   );
 }

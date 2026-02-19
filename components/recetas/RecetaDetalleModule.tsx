@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { useFieldArray, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -7,7 +8,9 @@ import type { CosteoDTO, InsumoDTO, RecetaDTO } from "@/lib/api-types";
 import { unidadBaseShort } from "@/lib/domain";
 import { formatMoney, formatPercent } from "@/lib/format";
 import { recetaSchema } from "@/lib/validation";
+import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { Field } from "@/components/ui/Field";
+import { LoadingState } from "@/components/ui/LoadingState";
 import { toast } from "sonner";
 
 type Props = {
@@ -32,6 +35,7 @@ export function RecetaDetalleModule({ recetaId }: Props) {
   const [loading, setLoading] = useState(true);
   const [unidadesProduccion, setUnidadesProduccion] = useState(1);
   const [isProducing, setIsProducing] = useState(false);
+  const [showProducirConfirm, setShowProducirConfirm] = useState(false);
 
   const {
     register,
@@ -144,13 +148,41 @@ export function RecetaDetalleModule({ recetaId }: Props) {
   }
 
   if (loading) {
-    return <p className="text-sm text-slate-600">Cargando detalle...</p>;
+    return <LoadingState message="Cargando detalle de receta…" />;
   }
 
+  const recetaNombre = watch("nombre");
+
   return (
-    <div className="grid grid-cols-1 gap-4 lg:grid-cols-[400px_1fr] lg:gap-6">
+    <div className="space-y-4">
+      <nav aria-label="Breadcrumb" className="text-sm text-secondary">
+        <Link href="/recetas" className="hover:text-primary underline">
+          Recetas
+        </Link>
+        <span className="mx-1.5">/</span>
+        <span className="text-primary">{recetaNombre || "…"}</span>
+      </nav>
+
+      <ConfirmModal
+        open={showProducirConfirm}
+        title="Registrar producción"
+        description="Se descontarán los insumos del inventario según esta receta."
+        confirmLabel="Registrar producción"
+        onConfirm={() => {
+          setShowProducirConfirm(false);
+          void registrarProduccion();
+        }}
+        onCancel={() => setShowProducirConfirm(false)}
+      >
+        <p>
+          Unidades a producir: <strong>{unidadesProduccion}</strong>. Si no alcanza el stock, la
+          operación puede dejar saldos negativos.
+        </p>
+      </ConfirmModal>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[400px_1fr] lg:gap-6">
       <section className="surface-card p-4 sm:p-5">
-        <h2 className="text-base font-semibold text-slate-900 sm:text-lg">Editar receta</h2>
+        <h2 className="text-base font-semibold text-primary sm:text-lg">Editar receta</h2>
         <form
           className="mt-4 space-y-3.5"
           onSubmit={handleSubmit(async (values) => {
@@ -250,7 +282,7 @@ export function RecetaDetalleModule({ recetaId }: Props) {
                 );
               })}
             </div>
-            <p className="mt-1 text-xs text-slate-500">
+            <p className="mt-1 text-xs text-muted">
               La cantidad se registra en la unidad base definida en cada insumo.
             </p>
           </div>
@@ -259,14 +291,14 @@ export function RecetaDetalleModule({ recetaId }: Props) {
             type="submit"
             disabled={isSubmitting}
           >
-            Guardar cambios
+            {isSubmitting ? "Guardando…" : "Guardar cambios"}
           </button>
         </form>
       </section>
 
       <section className="space-y-4">
         <article className="surface-card p-4 sm:p-5">
-          <h2 className="text-base font-semibold text-slate-900 sm:text-lg">Resultado de costeo</h2>
+          <h2 className="text-base font-semibold text-primary sm:text-lg">Resultado de costeo</h2>
           {costeo ? (
             <div className="mt-3 grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
               <Metric label="Costo materia prima" value={formatMoney(costeo.costoMateriaPrima)} />
@@ -290,18 +322,18 @@ export function RecetaDetalleModule({ recetaId }: Props) {
               />
             </div>
           ) : (
-            <p className="mt-2 text-sm text-slate-600">No hay datos de costeo.</p>
+            <p className="mt-2 text-sm text-secondary">No hay datos de costeo.</p>
           )}
         </article>
 
         <article className="surface-card p-4 sm:p-5">
-          <h3 className="text-base font-semibold text-slate-900">Registrar producción</h3>
-          <p className="mt-1 text-sm text-slate-600">
+          <h3 className="text-base font-semibold text-primary">Registrar producción</h3>
+          <p className="mt-1 text-sm text-secondary">
             Descuenta insumos del inventario según ingredientes y merma de esta receta.
           </p>
           <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-end">
             <label className="block flex-1 text-sm">
-              <span className="mb-1 block text-slate-700">Unidades producidas</span>
+              <span className="mb-1 block font-medium text-primary">Unidades producidas</span>
               <input
                 className="input"
                 type="number"
@@ -314,34 +346,40 @@ export function RecetaDetalleModule({ recetaId }: Props) {
             <button
               type="button"
               className="btn-primary inline-flex items-center justify-center disabled:opacity-50"
-              onClick={() => void registrarProduccion()}
+              onClick={() => {
+                if (!Number.isInteger(unidadesProduccion) || unidadesProduccion <= 0) {
+                  toast.error("Las unidades producidas deben ser un número entero mayor a cero");
+                  return;
+                }
+                setShowProducirConfirm(true);
+              }}
               disabled={isProducing}
             >
-              {isProducing ? "Registrando..." : "Registrar producción"}
+              {isProducing ? "Registrando…" : "Registrar producción"}
             </button>
           </div>
-          <p className="mt-2 text-xs text-slate-500">
+          <p className="mt-2 text-xs text-muted">
             Si no alcanza stock, la operación se permite y puede dejar saldos negativos.
           </p>
         </article>
 
         <article className="surface-card p-4 sm:p-5">
-          <h3 className="text-base font-semibold">Desglose por ingrediente</h3>
+          <h3 className="text-base font-semibold text-primary">Desglose por ingrediente</h3>
           {!costeo || costeo.desgloseIngredientes.length === 0 ? (
-            <p className="mt-2 text-sm text-slate-600">Sin ingredientes para mostrar.</p>
+            <p className="mt-2 text-sm text-secondary">Sin ingredientes para mostrar.</p>
           ) : (
             <div className="mt-3 space-y-2">
               {costeo.desgloseIngredientes.map((item) => (
                 <div
                   key={item.insumoId}
-                  className="grid grid-cols-1 gap-2 rounded-lg border border-slate-200 p-3 sm:grid-cols-2 xl:grid-cols-4"
+                  className="grid grid-cols-1 gap-2 rounded-lg border border-[var(--border)] p-3 sm:grid-cols-2 xl:grid-cols-4"
                 >
-                  <p className="font-medium">{item.nombre}</p>
-                  <p className="text-sm text-slate-600">Cantidad: {item.cantidad}</p>
-                  <p className="text-sm text-slate-600">
+                  <p className="font-medium text-primary">{item.nombre}</p>
+                  <p className="text-sm text-secondary">Cantidad: {item.cantidad}</p>
+                  <p className="text-sm text-secondary">
                     Costo unidad: {formatMoney(item.costoUnitario)}
                   </p>
-                  <p className="text-sm text-slate-700">
+                  <p className="text-sm text-primary">
                     Costo aplicado: {formatMoney(item.costoAplicado)}
                   </p>
                 </div>
@@ -350,15 +388,16 @@ export function RecetaDetalleModule({ recetaId }: Props) {
           )}
         </article>
       </section>
+      </div>
     </div>
   );
 }
 
 function Metric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-slate-200 p-3">
-      <p className="text-xs uppercase tracking-wide text-slate-500">{label}</p>
-      <p className="mt-1 font-mono text-base font-semibold">{value}</p>
+    <div className="rounded-lg border border-[var(--border)] p-3">
+      <p className="text-xs uppercase tracking-wide text-muted">{label}</p>
+      <p className="mt-1 font-mono text-base font-semibold text-primary">{value}</p>
     </div>
   );
 }

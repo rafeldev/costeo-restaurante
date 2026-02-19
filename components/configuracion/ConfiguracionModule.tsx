@@ -6,6 +6,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { ConfigCosteoDTO } from "@/lib/api-types";
 import { configuracionCosteoSchema } from "@/lib/validation";
+import { Button } from "@/components/ui/Button";
 import { Field } from "@/components/ui/Field";
 import { toast } from "sonner";
 
@@ -68,7 +69,7 @@ export function ConfiguracionModule() {
 
   return (
     <section className="surface-card max-w-xl p-4 sm:p-5">
-      <h2 className="text-base font-semibold text-slate-900 sm:text-lg">Parámetros globales</h2>
+      <h2 className="text-base font-semibold text-primary sm:text-lg">Parámetros globales</h2>
       <form
         className="mt-4 space-y-3.5"
         onSubmit={handleSubmit(async (values) => {
@@ -122,13 +123,9 @@ export function ConfiguracionModule() {
             {...register("redondeoPrecio", { valueAsNumber: true })}
           />
         </Field>
-        <button
-          className="btn-primary disabled:opacity-50"
-          type="submit"
-          disabled={isSubmitting}
-        >
+        <Button type="submit" isLoading={isSubmitting} loadingLabel="Guardando…">
           Guardar configuración
-        </button>
+        </Button>
       </form>
     </section>
   );

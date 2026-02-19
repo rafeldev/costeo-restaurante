@@ -8,7 +8,10 @@ import type { CosteoDTO, InsumoDTO, RecetaDTO } from "@/lib/api-types";
 import { unidadBaseShort } from "@/lib/domain";
 import { formatMoney } from "@/lib/format";
 import { recetaSchema } from "@/lib/validation";
+import { ConfirmModal } from "@/components/ui/ConfirmModal";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { Field } from "@/components/ui/Field";
+import { LoadingState } from "@/components/ui/LoadingState";
 import { toast } from "sonner";
 
 type RecipeFormValues = {
@@ -39,6 +42,7 @@ export function RecetasModule() {
     {},
   );
   const [loading, setLoading] = useState(false);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   const {
     register,
@@ -124,10 +128,14 @@ export function RecetasModule() {
     toast.success("Receta creada");
   }
 
-  async function deleteReceta(id: string) {
-    const ok = window.confirm("¿Eliminar esta receta?");
-    if (!ok) return;
+  function requestDeleteReceta(id: string) {
+    setDeleteConfirmId(id);
+  }
 
+  async function onConfirmDeleteReceta() {
+    const id = deleteConfirmId;
+    if (!id) return;
+    setDeleteConfirmId(null);
     const response = await fetch(`/api/recetas/${id}`, { method: "DELETE" });
     if (!response.ok) {
       const body = await response.json().catch(() => ({}));
@@ -138,11 +146,28 @@ export function RecetasModule() {
     toast.success("Receta eliminada");
   }
 
+  const recetaToDelete = deleteConfirmId ? recetas.find((r) => r.id === deleteConfirmId) : null;
+
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-[400px_1fr] lg:gap-6">
+      <ConfirmModal
+        open={!!deleteConfirmId}
+        title="Eliminar receta"
+        description="Esta acción no se puede deshacer."
+        confirmLabel="Eliminar"
+        variant="danger"
+        onConfirm={() => void onConfirmDeleteReceta()}
+        onCancel={() => setDeleteConfirmId(null)}
+      >
+        {recetaToDelete ? (
+          <p>
+            Se eliminará la receta <strong>{recetaToDelete.nombre}</strong>.
+          </p>
+        ) : null}
+      </ConfirmModal>
       <section className="surface-card p-4 sm:p-5">
-        <h2 className="text-base font-semibold text-slate-900 sm:text-lg">Nueva receta</h2>
-        <p className="mt-1 text-sm text-slate-600">
+        <h2 className="text-base font-semibold text-primary sm:text-lg">Nueva receta</h2>
+        <p className="mt-1 text-sm text-secondary">
           Crea recetas usando insumos ya registrados.
         </p>
         <form
@@ -193,7 +218,7 @@ export function RecetasModule() {
 
           <div>
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-              <h3 className="font-medium">Ingredientes</h3>
+              <h3 className="font-medium text-primary">Ingredientes</h3>
               <button
                 type="button"
                 className="btn-secondary min-h-9 px-2.5 py-1 text-xs"
@@ -245,11 +270,11 @@ export function RecetasModule() {
                 );
               })}
             </div>
-            <p className="mt-1 text-xs text-slate-500">
+            <p className="mt-1 text-xs text-muted">
               La cantidad se registra en la unidad base definida en cada insumo.
             </p>
             {errors.ingredientes?.message ? (
-              <p className="mt-1 text-xs text-red-600">{errors.ingredientes.message}</p>
+              <p className="mt-1 text-xs text-[var(--danger-text)]">{errors.ingredientes.message}</p>
             ) : null}
           </div>
 
@@ -258,57 +283,62 @@ export function RecetasModule() {
             type="submit"
             disabled={isSubmitting}
           >
-            Guardar receta
+            {isSubmitting ? "Guardando…" : "Guardar receta"}
           </button>
         </form>
       </section>
 
       <section className="surface-card p-4 sm:p-5">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-base font-semibold text-slate-900 sm:text-lg">Listado de recetas</h2>
-          <span className="text-sm text-slate-600">{totalRecetas} recetas</span>
+          <h2 className="text-base font-semibold text-primary sm:text-lg">Listado de recetas</h2>
+          <span className="text-sm text-secondary">{totalRecetas} recetas</span>
         </div>
-        {loading ? <p className="text-sm text-slate-600">Cargando...</p> : null}
+        {loading ? <LoadingState message="Cargando recetas…" /> : null}
         {!loading && recetas.length === 0 ? (
-          <p className="text-sm text-slate-600">Aún no hay recetas creadas.</p>
+          <EmptyState
+            title="Aún no hay recetas creadas"
+            description="Crea la primera con el formulario de la izquierda."
+          />
         ) : null}
-        <div className="space-y-2">
-          {recetas.map((receta) => {
-            const semaforo = semaforos[receta.id] ?? "sin_precio";
-            return (
-              <article
-                key={receta.id}
-                className="grid grid-cols-1 gap-2 rounded-lg border border-slate-200 p-3 md:grid-cols-[1fr_auto] md:items-center"
-              >
-                <div>
-                  <p className="font-medium text-slate-900">{receta.nombre}</p>
-                  <p className="text-sm text-slate-600">
-                    {receta.tipoProducto} · {receta.rendimientoPorciones} porciones ·{" "}
-                    {receta.precioVentaActual
-                      ? `Precio actual: ${formatMoney(receta.precioVentaActual)}`
-                      : "Sin precio actual"}
-                  </p>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <BadgeSemaforo value={semaforo} />
-                  <Link
-                    href={`/recetas/${receta.id}`}
-                    className="btn-secondary min-h-10 px-3 py-1.5 text-sm"
-                  >
-                    Ver detalle
-                  </Link>
-                  <button
-                    type="button"
-                    className="btn-danger min-h-10 px-3 py-1.5 text-sm"
-                    onClick={() => void deleteReceta(receta.id)}
-                  >
-                    Eliminar
-                  </button>
-                </div>
-              </article>
-            );
-          })}
-        </div>
+        {!loading && recetas.length > 0 ? (
+          <div className="space-y-2">
+            {recetas.map((receta) => {
+              const semaforo = semaforos[receta.id] ?? "sin_precio";
+              return (
+                <article
+                  key={receta.id}
+                  className="grid grid-cols-1 gap-2 rounded-lg border border-[var(--border)] p-3 md:grid-cols-[1fr_auto] md:items-center"
+                >
+                  <div>
+                    <p className="font-medium text-primary">{receta.nombre}</p>
+                    <p className="text-sm text-secondary">
+                      {receta.tipoProducto} · {receta.rendimientoPorciones} porciones ·{" "}
+                      {receta.precioVentaActual
+                        ? `Precio actual: ${formatMoney(receta.precioVentaActual)}`
+                        : "Sin precio actual"}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <BadgeSemaforo value={semaforo} />
+                    <Link
+                      href={`/recetas/${receta.id}`}
+                      className="btn-secondary min-h-10 px-3 py-1.5 text-sm"
+                    >
+                      Ver detalle
+                    </Link>
+                    <button
+                      type="button"
+                      className="btn-danger min-h-10 px-3 py-1.5 text-sm"
+                      onClick={() => requestDeleteReceta(receta.id)}
+                    >
+                      Eliminar
+                    </button>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        ) : null}
       </section>
     </div>
   );
@@ -319,7 +349,7 @@ function BadgeSemaforo({ value }: { value: CosteoDTO["semaforoRentabilidad"] }) 
     verde: "bg-emerald-100 text-emerald-800",
     amarillo: "bg-amber-100 text-amber-800",
     rojo: "bg-red-100 text-red-800",
-    sin_precio: "bg-slate-100 text-slate-700",
+    sin_precio: "bg-[var(--control-bg)] text-secondary",
   };
   const label: Record<CosteoDTO["semaforoRentabilidad"], string> = {
     verde: "Rentable",

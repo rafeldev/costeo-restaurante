@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { AlertasInventarioCard } from "@/components/inventario/AlertasInventarioCard";
 import { PageContainer } from "@/components/PageContainer";
+import { Card, CardHeader } from "@/components/ui/Card";
 
 const modules = [
   {
@@ -28,16 +29,15 @@ export default function Home() {
     >
       <section className="grid grid-cols-1 gap-4 md:grid-cols-3">
         {modules.map((module) => (
-          <article key={module.title} className="surface-card p-4 sm:p-5">
-            <h2 className="text-base font-semibold text-slate-900 sm:text-lg">{module.title}</h2>
-            <p className="mt-2 text-sm text-slate-600">{module.description}</p>
+          <Card key={module.title}>
+            <CardHeader title={module.title} description={module.description} />
             <Link
               href={module.href}
               className="btn-primary mt-4 inline-flex items-center"
             >
               Ir al módulo
             </Link>
-          </article>
+          </Card>
         ))}
       </section>
       <section className="mt-6">
