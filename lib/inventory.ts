@@ -1,3 +1,4 @@
+import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import type { TipoMovimientoValue, UnidadBaseValue } from "@/lib/domain";
 import { getDeltaFromMovimiento, getEstadoReposicion } from "@/lib/inventory-rules";
@@ -244,4 +245,71 @@ export async function registrarProduccionReceta(payload: {
       consumos,
     };
   });
+}
+
+/**
+ * Descuenta inventario por cada ítem de una venta cerrada.
+ * Usa la misma fórmula que registrarProduccionReceta (cantidad por porción × cantidad vendida × factor merma).
+ * Debe llamarse dentro de la misma transacción que actualiza la Venta a CERRADA.
+ */
+export async function descontarInventarioPorVenta(
+  payload: {
+    ownerId: string;
+    ventaId: string;
+    items: Array<{ recetaId: string; cantidad: number }>;
+    fechaMovimiento?: Date;
+  },
+  tx: Prisma.TransactionClient,
+) {
+  const fechaMovimiento = payload.fechaMovimiento ?? new Date();
+
+  for (const ventaItem of payload.items) {
+    const receta = await tx.receta.findFirst({
+      where: { id: ventaItem.recetaId, ownerId: payload.ownerId },
+      include: {
+        ingredientes: {
+          include: { insumo: true },
+          orderBy: { createdAt: "asc" },
+        },
+      },
+    });
+
+    if (!receta) {
+      throw new Error(`Receta no encontrada: ${ventaItem.recetaId}`);
+    }
+    if (receta.ingredientes.length === 0) {
+      continue;
+    }
+
+    const unidades = ventaItem.cantidad;
+
+    for (const item of receta.ingredientes) {
+      if (item.insumo.ownerId !== payload.ownerId) {
+        throw new Error("Ingrediente fuera del alcance del usuario");
+      }
+
+      const cantidadBase = decimalToNumber(item.cantidad);
+      const mermaPct = decimalToNumber(item.insumo.mermaPct);
+      const factorMerma = 1 + mermaPct / 100;
+      const cantidadDescontada = cantidadBase * unidades * factorMerma;
+
+      const inventario = await ensureInventarioInsumo(item.insumoId, tx as InventarioClient);
+      const nextStock = decimalToNumber(inventario.stockActual) - cantidadDescontada;
+      await tx.inventarioInsumo.update({
+        where: { insumoId: item.insumoId },
+        data: { stockActual: nextStock },
+      });
+
+      await tx.movimientoInventario.create({
+        data: {
+          insumoId: item.insumoId,
+          tipo: "SALIDA",
+          cantidad: cantidadDescontada,
+          motivo: `Venta ${receta.nombre} x${unidades}`,
+          fechaMovimiento,
+          referenciaVentaId: payload.ventaId,
+        },
+      });
+    }
+  }
 }

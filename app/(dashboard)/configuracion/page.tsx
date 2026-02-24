@@ -6,6 +6,7 @@ export default function ConfiguracionPage() {
     <PageContainer
       title="Configuración de costeo"
       description="Define los parámetros globales para calcular precio sugerido."
+      showNav={false}
     >
       <ConfiguracionModule />
     </PageContainer>

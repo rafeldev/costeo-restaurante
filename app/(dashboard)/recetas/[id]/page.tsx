@@ -11,6 +11,7 @@ export default async function RecetaDetallePage({ params }: PageProps) {
     <PageContainer
       title="Detalle de receta"
       description="Revisa el desglose de costos, precio sugerido y ajusta la receta."
+      showNav={false}
     >
       <RecetaDetalleModule recetaId={id} />
     </PageContainer>

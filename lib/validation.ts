@@ -64,6 +64,22 @@ export const producirRecetaSchema = z.object({
   fechaProduccion: z.string().min(1).optional(),
 });
 
+export const ventaCreateSchema = z.object({
+  mesa: z.string().trim().max(80).optional().or(z.literal("")),
+  notas: z.string().trim().max(500).optional().or(z.literal("")),
+});
+
+export const ventaPatchSchema = z.object({
+  mesa: z.string().trim().max(80).optional().or(z.literal("")),
+  notas: z.string().trim().max(500).optional().or(z.literal("")),
+});
+
+export const ventaItemSchema = z.object({
+  recetaId: z.string().min(1),
+  cantidad: z.number().positive(),
+  precioUnitario: z.number().positive().optional(),
+});
+
 export function parseNumberInput(value: unknown): number | undefined {
   if (value === "" || value === null || value === undefined) {
     return undefined;

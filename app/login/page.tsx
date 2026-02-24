@@ -113,12 +113,11 @@ function LoginForm() {
 
             <Button
               type="submit"
-              variant="primary"
-              isLoading={loading}
-              loadingLabel="Ingresando…"
+              variant="default"
+              disabled={loading}
               className="mt-1 w-full"
             >
-              Entrar al sistema
+              {loading ? "Ingresando…" : "Entrar al sistema"}
             </Button>
           </form>
 

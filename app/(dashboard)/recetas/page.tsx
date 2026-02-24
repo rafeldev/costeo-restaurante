@@ -6,6 +6,7 @@ export default function RecetasPage() {
     <PageContainer
       title="Recetas"
       description="Construye recetas con insumos y calcula su precio sugerido."
+      showNav={false}
     >
       <RecetasModule />
     </PageContainer>
