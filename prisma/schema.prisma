@@ -26,6 +26,17 @@ enum TipoMovimientoInventario {
   AJUSTE
 }
 
+enum EstadoProduccion {
+  ACTIVA
+  ANULADA
+}
+
+enum EstadoVenta {
+  ABIERTA
+  CERRADA
+  CANCELADA
+}
+
 model Insumo {
   id           String              @id @default(cuid())
   ownerId      String
@@ -59,8 +70,29 @@ model Receta {
   updatedAt         DateTime       @updatedAt
   owner             User           @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   ingredientes      RecetaInsumo[]
+  producciones      Produccion[]
+  ventaItems        VentaItem[]
 
   @@index([ownerId])
+}
+
+model Produccion {
+  id                    String              @id @default(cuid())
+  ownerId               String
+  recetaId              String?
+  recetaNombre          String
+  unidades              Int
+  costoTotalProduccion  Decimal             @db.Decimal(12, 2)
+  estado                EstadoProduccion    @default(ACTIVA)
+  fechaProduccion       DateTime            @default(now())
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+  owner                 User                @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  receta                Receta?             @relation(fields: [recetaId], references: [id], onDelete: SetNull)
+  movimientos           MovimientoInventario[]
+
+  @@index([ownerId, fechaProduccion])
+  @@index([recetaId, fechaProduccion])
 }
 
 model RecetaInsumo {
@@ -129,21 +161,60 @@ model InventarioInsumo {
   insumo       Insumo   @relation(fields: [insumoId], references: [id], onDelete: Cascade)
 }
 
+model Venta {
+  id          String       @id @default(cuid())
+  ownerId     String
+  estado      EstadoVenta  @default(ABIERTA)
+  fechaHora   DateTime     @default(now())
+  mesa        String?
+  notas       String?
+  total       Decimal      @default(0) @db.Decimal(12, 2)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  owner       User         @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  items       VentaItem[]
+  movimientos MovimientoInventario[]
+
+  @@index([ownerId, estado])
+  @@index([ownerId])
+}
+
+model VentaItem {
+  id             String   @id @default(cuid())
+  ventaId        String
+  recetaId       String
+  cantidad       Decimal  @db.Decimal(12, 4)
+  precioUnitario Decimal  @db.Decimal(12, 2)
+  subtotal       Decimal  @db.Decimal(12, 2)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  venta          Venta    @relation(fields: [ventaId], references: [id], onDelete: Cascade)
+  receta         Receta   @relation(fields: [recetaId], references: [id], onDelete: Restrict)
+
+  @@index([ventaId])
+}
+
 model MovimientoInventario {
-  id                String                  @id @default(cuid())
-  insumoId          String
-  tipo              TipoMovimientoInventario
-  cantidad          Decimal                 @db.Decimal(12, 4)
-  motivo            String?
-  fechaMovimiento   DateTime                @default(now())
+  id                 String                  @id @default(cuid())
+  insumoId           String
+  tipo               TipoMovimientoInventario
+  cantidad           Decimal                 @db.Decimal(12, 4)
+  motivo             String?
+  fechaMovimiento    DateTime                @default(now())
   referenciaCompraId String?
-  createdAt         DateTime                @default(now())
-  updatedAt         DateTime                @updatedAt
-  insumo            Insumo                  @relation(fields: [insumoId], references: [id], onDelete: Cascade)
-  referenciaCompra  CompraInsumo?           @relation(fields: [referenciaCompraId], references: [id], onDelete: SetNull)
+  referenciaVentaId  String?
+  produccionId       String?
+  createdAt          DateTime                @default(now())
+  updatedAt          DateTime                @updatedAt
+  insumo             Insumo                  @relation(fields: [insumoId], references: [id], onDelete: Cascade)
+  referenciaCompra   CompraInsumo?           @relation(fields: [referenciaCompraId], references: [id], onDelete: SetNull)
+  referenciaVenta    Venta?                  @relation(fields: [referenciaVentaId], references: [id], onDelete: SetNull)
+  produccion         Produccion?             @relation(fields: [produccionId], references: [id], onDelete: SetNull)
 
   @@index([insumoId, fechaMovimiento])
   @@index([tipo, fechaMovimiento])
+  @@index([referenciaVentaId])
+  @@index([produccionId])
 }
 
 model User {
@@ -154,6 +225,8 @@ model User {
   updatedAt            DateTime             @updatedAt
   insumos              Insumo[]
   recetas              Receta[]
+  producciones         Produccion[]
+  ventas               Venta[]
   configuracionesCosteo ConfiguracionCosteo[]
   proveedores          Proveedor[]
 }

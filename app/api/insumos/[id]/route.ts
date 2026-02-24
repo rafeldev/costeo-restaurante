@@ -52,12 +52,16 @@ export async function PATCH(request: Request, context: RouteContext) {
             ? undefined
             : parsed.data.proveedor || null,
       },
+      include: {
+        _count: { select: { recetaInsumos: true } },
+      },
     });
 
     return NextResponse.json({
       ...updated,
       costoUnidad: decimalToNumber(updated.costoUnidad),
       mermaPct: decimalToNumber(updated.mermaPct),
+      recetasCount: updated._count.recetaInsumos,
     });
   } catch (error) {
     if (error instanceof UnauthorizedError) {

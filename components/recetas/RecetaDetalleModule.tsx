@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { useFieldArray, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import type { CosteoDTO, InsumoDTO, RecetaDTO } from "@/lib/api-types";
+import type { CosteoDTO, InsumoDTO, ProduccionDTO, RecetaDTO } from "@/lib/api-types";
 import { unidadBaseShort } from "@/lib/domain";
 import { formatMoney, formatPercent } from "@/lib/format";
 import { recetaSchema } from "@/lib/validation";
@@ -32,6 +32,7 @@ type RecipeFormValues = {
 export function RecetaDetalleModule({ recetaId }: Props) {
   const [insumos, setInsumos] = useState<InsumoDTO[]>([]);
   const [costeo, setCosteo] = useState<CosteoDTO | null>(null);
+  const [producciones, setProducciones] = useState<ProduccionDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const [unidadesProduccion, setUnidadesProduccion] = useState(1);
   const [isProducing, setIsProducing] = useState(false);
@@ -64,11 +65,13 @@ export function RecetaDetalleModule({ recetaId }: Props) {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [insumosResponse, recetaResponse, costeoResponse] = await Promise.all([
-        fetch("/api/insumos"),
-        fetch(`/api/recetas/${recetaId}`),
-        fetch(`/api/recetas/${recetaId}/costeo`),
-      ]);
+      const [insumosResponse, recetaResponse, costeoResponse, produccionesResponse] =
+        await Promise.all([
+          fetch("/api/insumos"),
+          fetch(`/api/recetas/${recetaId}`),
+          fetch(`/api/recetas/${recetaId}/costeo`),
+          fetch(`/api/producciones?recetaId=${recetaId}`),
+        ]);
 
       if (!insumosResponse.ok || !recetaResponse.ok || !costeoResponse.ok) {
         throw new Error("No se pudieron cargar los datos de la receta");
@@ -81,8 +84,13 @@ export function RecetaDetalleModule({ recetaId }: Props) {
           costeoResponse.json(),
         ]);
 
+      const produccionesData: ProduccionDTO[] = produccionesResponse.ok
+        ? await produccionesResponse.json()
+        : [];
+
       setInsumos(insumosData);
       setCosteo(costeoData);
+      setProducciones(produccionesData);
       reset({
         nombre: recetaData.nombre,
         tipoProducto: recetaData.tipoProducto,
@@ -384,6 +392,75 @@ export function RecetaDetalleModule({ recetaId }: Props) {
                   </p>
                 </div>
               ))}
+            </div>
+          )}
+        </article>
+
+        <article className="surface-card p-4 sm:p-5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3 className="text-base font-semibold text-primary">Historial de producción</h3>
+            {producciones.length > 10 ? (
+              <Link
+                href={`/producciones?recetaId=${recetaId}`}
+                className="text-xs font-medium text-[var(--accent)] hover:underline"
+              >
+                Ver todas ({producciones.length})
+              </Link>
+            ) : null}
+          </div>
+          {producciones.length === 0 ? (
+            <p className="mt-2 text-sm text-secondary">
+              Aún no se ha registrado producción para esta receta.
+            </p>
+          ) : (
+            <div className="mt-3 space-y-2">
+              {producciones.slice(0, 10).map((p) => {
+                const isAnulada = p.estado === "ANULADA";
+                return (
+                  <div
+                    key={p.id}
+                    className={`flex flex-wrap items-center justify-between gap-2 rounded-lg border p-2.5 text-sm ${
+                      isAnulada
+                        ? "border-[var(--danger-border)] bg-red-50/40 opacity-75"
+                        : "border-[var(--border)]"
+                    }`}
+                  >
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-secondary">
+                        {new Date(p.fechaProduccion).toLocaleDateString("es-CO", {
+                          day: "numeric",
+                          month: "short",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </span>
+                      <span className="font-medium text-primary">
+                        {p.unidades} ud.
+                      </span>
+                      <span className="text-secondary">
+                        {formatMoney(p.costoTotalProduccion)}
+                      </span>
+                      <span
+                        className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${
+                          isAnulada
+                            ? "bg-red-100 text-red-800"
+                            : "bg-emerald-100 text-emerald-800"
+                        }`}
+                      >
+                        {p.estado}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+              {producciones.length > 10 ? (
+                <Link
+                  href={`/producciones?recetaId=${recetaId}`}
+                  className="mt-1 inline-block text-xs font-medium text-[var(--accent)] hover:underline"
+                >
+                  Ver todas en Producciones →
+                </Link>
+              ) : null}
             </div>
           )}
         </article>

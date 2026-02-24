@@ -137,6 +137,7 @@ body {
   padding-inline: 0.875rem;
   font-size: 0.875rem;
   font-weight: 600;
+  cursor: pointer;
   transition: border-color 160ms ease, background-color 160ms ease, box-shadow 160ms ease;
 }
 

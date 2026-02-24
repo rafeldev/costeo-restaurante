@@ -21,6 +21,7 @@ function serializeInsumo(insumo: {
     stockActual: { toNumber: () => number };
     stockMinimo: { toNumber: () => number };
   } | null;
+  _count?: { recetaInsumos: number };
   createdAt: Date;
   updatedAt: Date;
 }) {
@@ -34,6 +35,7 @@ function serializeInsumo(insumo: {
     ...insumo,
     costoUnidad: decimalToNumber(insumo.costoUnidad),
     mermaPct: decimalToNumber(insumo.mermaPct),
+    recetasCount: insumo._count?.recetaInsumos ?? 0,
     inventario:
       stockActual === null || stockMinimo === null
         ? null
@@ -50,7 +52,7 @@ export async function GET() {
     const user = await requireAuthUser();
     const insumos = await db.insumo.findMany({
       where: { ownerId: user.id },
-      include: { inventario: true },
+      include: { inventario: true, _count: { select: { recetaInsumos: true } } },
       orderBy: { createdAt: "desc" },
     });
 
@@ -101,6 +103,7 @@ export async function POST(request: Request) {
       },
       include: {
         inventario: true,
+        _count: { select: { recetaInsumos: true } },
       },
     });
 

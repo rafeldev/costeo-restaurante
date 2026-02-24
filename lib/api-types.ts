@@ -6,6 +6,7 @@ export type InsumoDTO = {
   costoUnidad: number;
   mermaPct: number;
   proveedor: string | null;
+  recetasCount?: number;
   inventario?: {
     stockActual: number;
     stockMinimo: number;
@@ -120,4 +121,22 @@ export type AlertaInventarioDTO = {
   stockActual: number;
   stockMinimo: number;
   estadoReposicion: "verde" | "amarillo" | "rojo";
+};
+
+export type ProduccionDTO = {
+  id: string;
+  recetaId: string | null;
+  recetaNombre: string;
+  unidades: number;
+  costoTotalProduccion: number;
+  estado: "ACTIVA" | "ANULADA";
+  fechaProduccion: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ProduccionResumenDTO = {
+  totalProducciones: number;
+  totalUnidades: number;
+  costoTotalMP: number;
 };

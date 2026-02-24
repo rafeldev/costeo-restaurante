@@ -54,7 +54,7 @@ export function Tabs<T extends string>({
               aria-controls={`tabpanel-${tab.key}`}
               id={`tab-${tab.key}`}
               tabIndex={isActive ? 0 : -1}
-              className={`min-h-11 border-b-2 px-4 py-2 text-sm font-medium transition sm:px-5 ${
+              className={`min-h-11 cursor-pointer border-b-2 px-4 py-2 text-sm font-medium transition sm:px-5 ${
                 isActive
                   ? "border-[var(--accent)] text-[var(--ink)]"
                   : "border-transparent text-[var(--ink-secondary)] hover:border-[var(--border)] hover:text-[var(--ink)]"

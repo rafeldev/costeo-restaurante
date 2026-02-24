@@ -35,7 +35,11 @@ const defaultValues: RecipeFormValues = {
   ingredientes: [{ insumoId: "", cantidad: 1 }],
 };
 
-export function RecetasModule() {
+type RecetasModuleProps = {
+  filterInsumoId?: string | null;
+};
+
+export function RecetasModule({ filterInsumoId }: RecetasModuleProps = {}) {
   const [insumos, setInsumos] = useState<InsumoDTO[]>([]);
   const [recetas, setRecetas] = useState<RecetaDTO[]>([]);
   const [semaforos, setSemaforos] = useState<Record<string, CosteoDTO["semaforoRentabilidad"]>>(
@@ -61,7 +65,19 @@ export function RecetasModule() {
     name: "ingredientes",
   });
 
-  const totalRecetas = useMemo(() => recetas.length, [recetas]);
+  const filteredRecetas = useMemo(() => {
+    if (!filterInsumoId) return recetas;
+    return recetas.filter((r) =>
+      r.ingredientes?.some((ing) => ing.insumoId === filterInsumoId),
+    );
+  }, [recetas, filterInsumoId]);
+
+  const filterInsumoNombre = useMemo(() => {
+    if (!filterInsumoId) return null;
+    return insumos.find((i) => i.id === filterInsumoId)?.nombre ?? null;
+  }, [insumos, filterInsumoId]);
+
+  const totalRecetas = useMemo(() => filteredRecetas.length, [filteredRecetas]);
 
   async function loadData() {
     setLoading(true);
@@ -293,16 +309,29 @@ export function RecetasModule() {
           <h2 className="text-base font-semibold text-primary sm:text-lg">Listado de recetas</h2>
           <span className="text-sm text-secondary">{totalRecetas} recetas</span>
         </div>
+        {filterInsumoId && filterInsumoNombre ? (
+          <div className="mb-4 flex items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--parchment)] px-3 py-2 text-sm">
+            <span className="text-secondary">
+              Mostrando recetas que usan <strong className="text-primary">{filterInsumoNombre}</strong>
+            </span>
+            <Link
+              href="/recetas"
+              className="ml-auto shrink-0 text-xs font-medium text-[var(--accent)] hover:underline"
+            >
+              Quitar filtro
+            </Link>
+          </div>
+        ) : null}
         {loading ? <LoadingState message="Cargando recetas…" /> : null}
-        {!loading && recetas.length === 0 ? (
+        {!loading && filteredRecetas.length === 0 ? (
           <EmptyState
-            title="Aún no hay recetas creadas"
-            description="Crea la primera con el formulario de la izquierda."
+            title={filterInsumoId ? "No hay recetas con este insumo" : "Aún no hay recetas creadas"}
+            description={filterInsumoId ? "Este insumo no se usa en ninguna receta todavía." : "Crea la primera con el formulario de la izquierda."}
           />
         ) : null}
-        {!loading && recetas.length > 0 ? (
+        {!loading && filteredRecetas.length > 0 ? (
           <div className="space-y-2">
-            {recetas.map((receta) => {
+            {filteredRecetas.map((receta) => {
               const semaforo = semaforos[receta.id] ?? "sin_precio";
               return (
                 <article

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -79,8 +80,9 @@ export function InsumosModule() {
   const totalInsumos = useMemo(() => insumos.length, [insumos]);
 
   async function onSubmit(values: FormValues) {
-    const endpoint = editingId ? `/api/insumos/${editingId}` : "/api/insumos";
-    const method = editingId ? "PATCH" : "POST";
+    const isEditing = !!editingId;
+    const endpoint = isEditing ? `/api/insumos/${editingId}` : "/api/insumos";
+    const method = isEditing ? "PATCH" : "POST";
     const response = await fetch(endpoint, {
       method,
       headers: { "Content-Type": "application/json" },
@@ -92,6 +94,8 @@ export function InsumosModule() {
       throw new Error(body.message ?? "No se pudo guardar");
     }
 
+    const saved: InsumoDTO = await response.json();
+
     setEditingId(null);
     reset(defaultValues);
     setPrecioCompra(0);
@@ -99,7 +103,24 @@ export function InsumosModule() {
     setUnidadCompra("KILOGRAMO");
     setCalcError(null);
     await loadInsumos();
-    toast.success(editingId ? "Insumo actualizado" : "Insumo creado");
+
+    const count = saved.recetasCount ?? 0;
+    if (count > 0) {
+      toast.success(
+        `${isEditing ? "Actualizado" : "Creado"}. Este insumo se usa en ${count} receta${count === 1 ? "" : "s"}.`,
+        {
+          action: {
+            label: "Ver recetas afectadas",
+            onClick: () => {
+              window.location.href = `/recetas?insumoId=${saved.id}`;
+            },
+          },
+          duration: 8000,
+        },
+      );
+    } else {
+      toast.success(isEditing ? "Insumo actualizado" : "Insumo creado");
+    }
   }
 
   function requestDelete(id: string) {
@@ -342,6 +363,14 @@ export function InsumosModule() {
                       {insumo.inventario.stockMinimo.toFixed(2)} · estado{" "}
                       {insumo.inventario.estadoReposicion}
                     </p>
+                  ) : null}
+                  {(insumo.recetasCount ?? 0) > 0 ? (
+                    <Link
+                      href={`/recetas?insumoId=${insumo.id}`}
+                      className="mt-1 inline-block text-xs font-medium text-[var(--accent)] hover:underline"
+                    >
+                      En {insumo.recetasCount} receta{insumo.recetasCount === 1 ? "" : "s"}
+                    </Link>
                   ) : null}
                 </div>
                 <div className="flex flex-wrap gap-2">
