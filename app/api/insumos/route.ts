@@ -16,7 +16,8 @@ function serializeInsumo(insumo: {
   unidadBase: UnidadBase;
   costoUnidad: { toNumber: () => number };
   mermaPct: { toNumber: () => number };
-  proveedor: string | null;
+  proveedorPreferidoId: string | null;
+  proveedorPreferido?: { id: string; nombre: string } | null;
   inventario?: {
     stockActual: { toNumber: () => number };
     stockMinimo: { toNumber: () => number };
@@ -52,7 +53,11 @@ export async function GET() {
     const user = await requireAuthUser();
     const insumos = await db.insumo.findMany({
       where: { ownerId: user.id },
-      include: { inventario: true, _count: { select: { recetaInsumos: true } } },
+      include: {
+        inventario: true,
+        proveedorPreferido: { select: { id: true, nombre: true } },
+        _count: { select: { recetaInsumos: true } },
+      },
       orderBy: { createdAt: "desc" },
     });
 
@@ -85,6 +90,16 @@ export async function POST(request: Request) {
       );
     }
 
+    if (parsed.data.proveedorPreferidoId) {
+      const proveedor = await db.proveedor.findFirst({
+        where: { id: parsed.data.proveedorPreferidoId, ownerId: user.id },
+        select: { id: true },
+      });
+      if (!proveedor) {
+        return NextResponse.json({ message: "Proveedor no encontrado" }, { status: 400 });
+      }
+    }
+
     const created = await db.insumo.create({
       data: {
         ownerId: user.id,
@@ -93,7 +108,7 @@ export async function POST(request: Request) {
         unidadBase: parsed.data.unidadBase as UnidadBase,
         costoUnidad: parsed.data.costoUnidad,
         mermaPct: parsed.data.mermaPct,
-        proveedor: parsed.data.proveedor || null,
+        proveedorPreferidoId: parsed.data.proveedorPreferidoId || null,
         inventario: {
           create: {
             stockActual: 0,
@@ -103,6 +118,7 @@ export async function POST(request: Request) {
       },
       include: {
         inventario: true,
+        proveedorPreferido: { select: { id: true, nombre: true } },
         _count: { select: { recetaInsumos: true } },
       },
     });

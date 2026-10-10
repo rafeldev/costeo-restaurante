@@ -5,7 +5,11 @@ export type InsumoDTO = {
   unidadBase: "GRAMO" | "KILOGRAMO" | "MILILITRO" | "LITRO" | "UNIDAD";
   costoUnidad: number;
   mermaPct: number;
-  proveedor: string | null;
+  proveedorPreferidoId: string | null;
+  proveedorPreferido?: {
+    id: string;
+    nombre: string;
+  } | null;
   recetasCount?: number;
   inventario?: {
     stockActual: number;

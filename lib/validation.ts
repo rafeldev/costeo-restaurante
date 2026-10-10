@@ -9,7 +9,7 @@ export const insumoSchema = z.object({
   unidadBase: z.enum(unidadBaseValues),
   costoUnidad: z.number().positive(),
   mermaPct: porcentajeSchema.default(0),
-  proveedor: z.string().trim().max(120).optional().or(z.literal("")),
+  proveedorPreferidoId: z.string().optional().nullable().or(z.literal("")),
 });
 
 export const recetaIngredienteSchema = z.object({

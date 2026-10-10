@@ -40,6 +40,7 @@ async function main() {
     { nombre: "Carnicería del barrio", contacto: "carniceria@example.com" },
     { nombre: "Distribuidor lácteos", contacto: "lacteos@example.com" },
     { nombre: "Empaques SAS", contacto: "empaques@example.com" },
+    { nombre: "Producción propia", contacto: null },
   ];
 
   for (const proveedor of proveedoresBase) {
@@ -102,6 +103,21 @@ async function main() {
   ];
 
   for (const insumo of insumosBase) {
+    const proveedorPreferido = await db.proveedor.findUniqueOrThrow({
+      where: {
+        ownerId_nombre: {
+          ownerId: owner.id,
+          nombre: insumo.proveedor,
+        },
+      },
+    });
+    const insumoData = {
+      nombre: insumo.nombre,
+      categoria: insumo.categoria,
+      unidadBase: insumo.unidadBase,
+      costoUnidad: insumo.costoUnidad,
+      mermaPct: insumo.mermaPct,
+    };
     const upserted = await db.insumo.upsert({
       where: {
         ownerId_nombre: {
@@ -111,14 +127,15 @@ async function main() {
       },
       create: {
         ownerId: owner.id,
-        ...insumo,
+        ...insumoData,
+        proveedorPreferidoId: proveedorPreferido.id,
       },
       update: {
-        categoria: insumo.categoria,
-        unidadBase: insumo.unidadBase,
-        costoUnidad: insumo.costoUnidad,
-        mermaPct: insumo.mermaPct,
-        proveedor: insumo.proveedor,
+        categoria: insumoData.categoria,
+        unidadBase: insumoData.unidadBase,
+        costoUnidad: insumoData.costoUnidad,
+        mermaPct: insumoData.mermaPct,
+        proveedorPreferidoId: proveedorPreferido.id,
       },
     });
 

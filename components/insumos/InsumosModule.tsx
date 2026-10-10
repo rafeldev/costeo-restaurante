@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { z } from "zod";
-import type { InsumoDTO } from "@/lib/api-types";
+import type { InsumoDTO, ProveedorDTO } from "@/lib/api-types";
 import {
   unidadBaseLabels,
   unidadBaseShort,
@@ -31,11 +31,12 @@ const defaultValues: FormValues = {
   unidadBase: "GRAMO",
   costoUnidad: 0,
   mermaPct: 0,
-  proveedor: "",
+  proveedorPreferidoId: "",
 };
 
 export function InsumosModule() {
   const [insumos, setInsumos] = useState<InsumoDTO[]>([]);
+  const [proveedores, setProveedores] = useState<ProveedorDTO[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -62,10 +63,17 @@ export function InsumosModule() {
     setIsLoading(true);
     setError(null);
     try {
-      const response = await fetch("/api/insumos");
-      if (!response.ok) throw new Error("No se pudieron cargar los insumos");
-      const data: InsumoDTO[] = await response.json();
-      setInsumos(data);
+      const [insumosResponse, proveedoresResponse] = await Promise.all([
+        fetch("/api/insumos"),
+        fetch("/api/proveedores"),
+      ]);
+      if (!insumosResponse.ok || !proveedoresResponse.ok) {
+        throw new Error("No se pudieron cargar los insumos");
+      }
+      const [insumosData, proveedoresData]: [InsumoDTO[], ProveedorDTO[]] =
+        await Promise.all([insumosResponse.json(), proveedoresResponse.json()]);
+      setInsumos(insumosData);
+      setProveedores(proveedoresData);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error desconocido");
     } finally {
@@ -149,7 +157,7 @@ export function InsumosModule() {
       unidadBase: insumo.unidadBase,
       costoUnidad: insumo.costoUnidad,
       mermaPct: insumo.mermaPct,
-      proveedor: insumo.proveedor ?? "",
+      proveedorPreferidoId: insumo.proveedorPreferidoId ?? "",
     });
     setPrecioCompra(0);
     setCantidadCompra(1);
@@ -298,8 +306,18 @@ export function InsumosModule() {
               {...register("mermaPct", { valueAsNumber: true })}
             />
           </Field>
-          <Field label="Proveedor (opcional)" error={errors.proveedor?.message}>
-            <input className="input" {...register("proveedor")} />
+          <Field
+            label="Proveedor preferido (opcional)"
+            error={errors.proveedorPreferidoId?.message}
+          >
+            <select className="input" {...register("proveedorPreferidoId")}>
+              <option value="">Sin proveedor preferido</option>
+              {proveedores.map((proveedor) => (
+                <option key={proveedor.id} value={proveedor.id}>
+                  {proveedor.nombre}
+                </option>
+              ))}
+            </select>
           </Field>
           <div className="flex flex-wrap gap-2">
             <Button type="submit" isLoading={isSubmitting} loadingLabel="Guardando…">
@@ -356,6 +374,11 @@ export function InsumosModule() {
                     {formatMoney(insumo.costoUnidad)}/{unidadBaseShort[insumo.unidadBase]} ·
                     {" "}Merma {insumo.mermaPct}%
                   </p>
+                  {insumo.proveedorPreferido ? (
+                    <p className="mt-1 text-xs text-muted">
+                      Proveedor preferido: {insumo.proveedorPreferido.nombre}
+                    </p>
+                  ) : null}
                   {insumo.inventario ? (
                     <p className="mt-1 text-xs text-muted">
                       Stock: {insumo.inventario.stockActual.toFixed(2)}{" "}

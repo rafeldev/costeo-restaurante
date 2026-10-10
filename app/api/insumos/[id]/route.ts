@@ -39,6 +39,16 @@ export async function PATCH(request: Request, context: RouteContext) {
       return NextResponse.json({ message: "Insumo no encontrado" }, { status: 404 });
     }
 
+    if (parsed.data.proveedorPreferidoId) {
+      const proveedor = await db.proveedor.findFirst({
+        where: { id: parsed.data.proveedorPreferidoId, ownerId: user.id },
+        select: { id: true },
+      });
+      if (!proveedor) {
+        return NextResponse.json({ message: "Proveedor no encontrado" }, { status: 400 });
+      }
+    }
+
     const updated = await db.insumo.update({
       where: { id },
       data: {
@@ -47,12 +57,13 @@ export async function PATCH(request: Request, context: RouteContext) {
         unidadBase: parsed.data.unidadBase as UnidadBase | undefined,
         costoUnidad: parsed.data.costoUnidad,
         mermaPct: parsed.data.mermaPct,
-        proveedor:
-          parsed.data.proveedor === undefined
+        proveedorPreferidoId:
+          parsed.data.proveedorPreferidoId === undefined
             ? undefined
-            : parsed.data.proveedor || null,
+            : parsed.data.proveedorPreferidoId || null,
       },
       include: {
+        proveedorPreferido: { select: { id: true, nombre: true } },
         _count: { select: { recetaInsumos: true } },
       },
     });
