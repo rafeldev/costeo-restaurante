@@ -11,13 +11,14 @@ export default withAuth(
     callbacks: {
       authorized({ req, token }) {
         const pathname = req.nextUrl.pathname;
-        const isApiAuthRoute = pathname.startsWith("/api/auth");
+        const isApiAuthRoute = pathname === "/api/auth" || pathname.startsWith("/api/auth/");
         const isApiRoute = pathname.startsWith("/api/");
         const isPublicRoute = publicRoutes.some(
           (route) => pathname === route || pathname.startsWith(`${route}/`),
         );
 
         if (isApiAuthRoute) return true;
+        // API handlers enforce auth themselves so unauthenticated requests receive JSON 401s.
         if (isApiRoute && !token) return true;
         if (isPublicRoute) return true;
 
