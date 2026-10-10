@@ -99,7 +99,19 @@ vi.mock("@/lib/db", () => {
     },
   };
 
-  return { db: { $transaction: async (fn: (t: typeof tx) => unknown) => fn(tx) } };
+  return {
+    db: {
+      $transaction: async (fn: (t: typeof tx) => unknown) => {
+        const snapshot = structuredClone(store);
+        try {
+          return await fn(tx);
+        } catch (error) {
+          Object.assign(store, snapshot);
+          throw error;
+        }
+      },
+    },
+  };
 });
 
 import {
@@ -271,6 +283,23 @@ describe("producciones", () => {
     ).rejects.toThrow("fuera del alcance");
   });
 
+  it("registrar: revierte todos los cambios cuando el stock es insuficiente", async () => {
+    const insumo = seedInsumo({ mermaPct: 10, costoUnidad: 2 });
+    store.inventarios.push({ insumoId: "ins-1", stockActual: 100, stockMinimo: 0 });
+    seedReceta([{ insumoId: "ins-1", cantidad: 100, insumo }]);
+
+    await expect(
+      registrarProduccionReceta({ ownerId: OWNER, recetaId: "rec-1", unidades: 1 }),
+    ).rejects.toMatchObject({
+      faltantes: [
+        { insumoId: "ins-1", nombre: "Carne", requerido: 110, disponible: 100 },
+      ],
+    });
+    expect(stockOf("ins-1")).toBe(100);
+    expect(store.producciones).toHaveLength(0);
+    expect(store.movimientos).toHaveLength(0);
+  });
+
   it("anular: devuelve lo descontado y rechaza una segunda anulación", async () => {
     setupReceta();
     const { produccionId } = await registrarProduccionReceta({
@@ -357,5 +386,23 @@ describe("producciones", () => {
     await expect(
       editarProduccion({ ownerId: OWNER, produccionId, nuevasUnidades: 2 }),
     ).rejects.toThrow("fuera del alcance");
+  });
+
+  it("editar: conserva la producción original si la corrección excede el stock", async () => {
+    setupReceta();
+    const { produccionId } = await registrarProduccionReceta({
+      ownerId: OWNER,
+      recetaId: "rec-1",
+      unidades: 1,
+    });
+    const stockAntes = stockOf("ins-1");
+
+    await expect(
+      editarProduccion({ ownerId: OWNER, produccionId, nuevasUnidades: 20 }),
+    ).rejects.toThrow("Stock insuficiente");
+    expect(stockOf("ins-1")).toBe(stockAntes);
+    expect(store.producciones).toHaveLength(1);
+    expect(store.producciones[0]).toMatchObject({ id: produccionId, estado: "ACTIVA" });
+    expect(store.movimientos).toHaveLength(1);
   });
 });

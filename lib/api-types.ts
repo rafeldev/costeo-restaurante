@@ -140,3 +140,10 @@ export type ProduccionResumenDTO = {
   totalUnidades: number;
   costoTotalMP: number;
 };
+
+export type StockShortageDTO = {
+  insumoId: string;
+  nombre: string;
+  requerido: number;
+  disponible: number;
+};

@@ -2,7 +2,11 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { ProduccionDTO, ProduccionResumenDTO } from "@/lib/api-types";
+import type {
+  ProduccionDTO,
+  ProduccionResumenDTO,
+  StockShortageDTO,
+} from "@/lib/api-types";
 import { formatMoney } from "@/lib/format";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -121,7 +125,20 @@ export function ProduccionesModule({ filterRecetaId }: Props = {}) {
         body: JSON.stringify({ unidades: editarUnidades }),
       });
       if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
+        const body: { message?: string; faltantes?: StockShortageDTO[] } = await res
+          .json()
+          .catch(() => ({}));
+        if (body.faltantes?.length) {
+          toast.error(body.message ?? "Stock insuficiente", {
+            description: body.faltantes
+              .map(
+                (item) =>
+                  `${item.nombre}: requiere ${item.requerido}, disponible ${item.disponible}`,
+              )
+              .join(" · "),
+          });
+          return;
+        }
         throw new Error(body.message ?? "No se pudo editar");
       }
       toast.success("Producción corregida");

@@ -4,7 +4,13 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { useFieldArray, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import type { CosteoDTO, InsumoDTO, ProduccionDTO, RecetaDTO } from "@/lib/api-types";
+import type {
+  CosteoDTO,
+  InsumoDTO,
+  ProduccionDTO,
+  RecetaDTO,
+  StockShortageDTO,
+} from "@/lib/api-types";
 import { unidadBaseShort } from "@/lib/domain";
 import { formatMoney, formatPercent } from "@/lib/format";
 import { recetaSchema } from "@/lib/validation";
@@ -142,7 +148,20 @@ export function RecetaDetalleModule({ recetaId }: Props) {
         body: JSON.stringify({ unidades: unidadesProduccion }),
       });
       if (!response.ok) {
-        const body = await response.json().catch(() => ({}));
+        const body: { message?: string; faltantes?: StockShortageDTO[] } = await response
+          .json()
+          .catch(() => ({}));
+        if (body.faltantes?.length) {
+          toast.error(body.message ?? "Stock insuficiente", {
+            description: body.faltantes
+              .map(
+                (item) =>
+                  `${item.nombre}: requiere ${item.requerido}, disponible ${item.disponible}`,
+              )
+              .join(" · "),
+          });
+          return;
+        }
         throw new Error(body.message ?? "No se pudo registrar la producción");
       }
 
@@ -183,8 +202,8 @@ export function RecetaDetalleModule({ recetaId }: Props) {
         onCancel={() => setShowProducirConfirm(false)}
       >
         <p>
-          Unidades a producir: <strong>{unidadesProduccion}</strong>. Si no alcanza el stock, la
-          operación puede dejar saldos negativos.
+          Unidades a producir: <strong>{unidadesProduccion}</strong>. La operación se cancelará si
+          algún insumo no tiene stock suficiente.
         </p>
       </ConfirmModal>
 
@@ -367,7 +386,7 @@ export function RecetaDetalleModule({ recetaId }: Props) {
             </button>
           </div>
           <p className="mt-2 text-xs text-muted">
-            Si no alcanza stock, la operación se permite y puede dejar saldos negativos.
+            Si no alcanza el stock, no se registrará ningún descuento ni producción.
           </p>
         </article>
 

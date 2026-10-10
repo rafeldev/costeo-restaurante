@@ -1,7 +1,12 @@
 import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import type { TipoMovimientoValue, UnidadBaseValue } from "@/lib/domain";
-import { NotFoundError, ValidationError } from "@/lib/errors";
+import {
+  InsufficientStockError,
+  NotFoundError,
+  type StockShortage,
+  ValidationError,
+} from "@/lib/errors";
 import { getDeltaFromMovimiento, getEstadoReposicion } from "@/lib/inventory-rules";
 import { calculateUnitCostFromPurchase, convertQuantity } from "@/lib/unit-conversion";
 
@@ -69,6 +74,7 @@ async function crearProduccionConConsumos(
   }
 
   let costoTotal = 0;
+  const faltantes: StockShortage[] = [];
   const consumos: Array<{
     insumoId: string;
     nombre: string;
@@ -102,6 +108,15 @@ async function crearProduccionConConsumos(
       where: { insumoId: item.insumoId },
       data: { stockActual: { decrement: cantidadDescontada } },
     });
+    const stockActual = decimalToNumber(updatedInventario.stockActual);
+    if (stockActual < 0) {
+      faltantes.push({
+        insumoId: item.insumoId,
+        nombre: item.insumo.nombre,
+        requerido: Number(cantidadDescontada.toFixed(4)),
+        disponible: Number((stockActual + cantidadDescontada).toFixed(4)),
+      });
+    }
     await tx.movimientoInventario.create({
       data: {
         insumoId: item.insumoId,
@@ -117,9 +132,13 @@ async function crearProduccionConConsumos(
       nombre: item.insumo.nombre,
       cantidadDescontada,
       costoAplicado,
-      stockActual: decimalToNumber(updatedInventario.stockActual),
+      stockActual,
       stockMinimo: decimalToNumber(updatedInventario.stockMinimo),
     });
+  }
+
+  if (faltantes.length > 0) {
+    throw new InsufficientStockError(faltantes);
   }
 
   const updated = await tx.produccion.update({

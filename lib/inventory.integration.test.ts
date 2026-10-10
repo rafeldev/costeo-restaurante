@@ -56,6 +56,62 @@ describe("inventario concurrente", () => {
       await db.user.delete({ where: { id: owner.id } });
     }
   });
+
+  it("permite solo las producciones cubiertas por el stock disponible", async () => {
+    const suffix = `${Date.now()}-${Math.random()}`;
+    const owner = await db.user.create({
+      data: {
+        email: `stock-test-${suffix}@example.com`,
+        passwordHash: "integration-test",
+      },
+    });
+
+    try {
+      const insumo = await db.insumo.create({
+        data: {
+          ownerId: owner.id,
+          nombre: `Insumo ${suffix}`,
+          categoria: "Test",
+          unidadBase: "GRAMO",
+          costoUnidad: 1,
+        },
+      });
+      const receta = await db.receta.create({
+        data: {
+          ownerId: owner.id,
+          nombre: `Receta ${suffix}`,
+          tipoProducto: "Test",
+          rendimientoPorciones: 1,
+          ingredientes: {
+            create: { insumoId: insumo.id, cantidad: 10 },
+          },
+        },
+      });
+      await db.inventarioInsumo.create({
+        data: { insumoId: insumo.id, stockActual: 50, stockMinimo: 0 },
+      });
+
+      const results = await Promise.allSettled(
+        Array.from({ length: 8 }, () =>
+          registrarProduccionReceta({
+            ownerId: owner.id,
+            recetaId: receta.id,
+            unidades: 1,
+          }),
+        ),
+      );
+      const inventario = await db.inventarioInsumo.findUniqueOrThrow({
+        where: { insumoId: insumo.id },
+      });
+
+      expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(5);
+      expect(results.filter((result) => result.status === "rejected")).toHaveLength(3);
+      expect(inventario.stockActual.toNumber()).toBe(0);
+    } finally {
+      await db.receta.deleteMany({ where: { ownerId: owner.id } });
+      await db.user.delete({ where: { id: owner.id } });
+    }
+  });
 });
 
 afterAll(async () => {
