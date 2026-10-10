@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import type { CosteoResultado } from "@/lib/domain";
+import { NotFoundError, ValidationError } from "@/lib/errors";
 import { calculateSuggestedPrice } from "@/lib/pricing/calculateSuggestedPrice";
 
 type DecimalLike = { toNumber: () => number };
@@ -30,16 +31,16 @@ export async function calculateRecipeCosting(
   ]);
 
   if (!receta) {
-    throw new Error("Receta no encontrada");
+    throw new NotFoundError("Receta no encontrada");
   }
   if (!config) {
-    throw new Error("Configuración de costeo no encontrada");
+    throw new NotFoundError("Configuración de costeo no encontrada");
   }
   const hasForeignIngredient = receta.ingredientes.some(
     (item) => item.insumo.ownerId !== ownerId,
   );
   if (hasForeignIngredient) {
-    throw new Error("Receta con ingredientes fuera del alcance del usuario");
+    throw new ValidationError("Receta con ingredientes fuera del alcance del usuario");
   }
 
   const desgloseIngredientes = receta.ingredientes.map((item) => {

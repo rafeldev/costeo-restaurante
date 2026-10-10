@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { UnauthorizedError, requireAuthUser, unauthorizedResponse } from "@/lib/auth";
+import { handleRouteError } from "@/lib/api-errors";
+import { requireAuthUser } from "@/lib/auth";
 import { editarProduccion } from "@/lib/inventory";
 
 export const runtime = "nodejs";
@@ -33,14 +34,6 @@ export async function POST(request: Request, context: RouteContext) {
 
     return NextResponse.json(result);
   } catch (error) {
-    if (error instanceof UnauthorizedError) return unauthorizedResponse();
-    if (error instanceof Error) {
-      const status = error.message.includes("no encontrada") ? 404 : 400;
-      return NextResponse.json({ message: error.message }, { status });
-    }
-    return NextResponse.json(
-      { message: "No se pudo editar la producción." },
-      { status: 500 },
-    );
+    return handleRouteError(error);
   }
 }

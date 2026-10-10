@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { UnauthorizedError, requireAuthUser, unauthorizedResponse } from "@/lib/auth";
+import { handleRouteError } from "@/lib/api-errors";
+import { requireAuthUser } from "@/lib/auth";
 import { registrarProduccionReceta } from "@/lib/inventory";
 import { parseNumberInput, producirRecetaSchema } from "@/lib/validation";
 
@@ -37,18 +38,6 @@ export async function POST(request: Request, context: RouteContext) {
 
     return NextResponse.json(result, { status: 201 });
   } catch (error) {
-    if (error instanceof UnauthorizedError) {
-      return unauthorizedResponse();
-    }
-    if (error instanceof Error && error.message.includes("no encontrada")) {
-      return NextResponse.json({ message: error.message }, { status: 404 });
-    }
-    if (error instanceof Error) {
-      return NextResponse.json({ message: error.message }, { status: 400 });
-    }
-    return NextResponse.json(
-      { message: "No se pudo registrar la producción." },
-      { status: 500 },
-    );
+    return handleRouteError(error);
   }
 }

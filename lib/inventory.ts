@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import type { TipoMovimientoValue, UnidadBaseValue } from "@/lib/domain";
+import { NotFoundError, ValidationError } from "@/lib/errors";
 import { getDeltaFromMovimiento, getEstadoReposicion } from "@/lib/inventory-rules";
 import { calculateUnitCostFromPurchase, convertQuantity } from "@/lib/unit-conversion";
 
@@ -40,7 +41,7 @@ export async function registrarCompraInsumo(payload: {
       where: { id: payload.insumoId, ownerId: payload.ownerId },
     });
     if (!insumo) {
-      throw new Error("Insumo no encontrado");
+      throw new NotFoundError("Insumo no encontrado");
     }
 
     if (payload.proveedorId) {
@@ -49,7 +50,7 @@ export async function registrarCompraInsumo(payload: {
         select: { id: true },
       });
       if (!proveedor) {
-        throw new Error("Proveedor no encontrado para el usuario");
+        throw new NotFoundError("Proveedor no encontrado para el usuario");
       }
     }
 
@@ -62,7 +63,7 @@ export async function registrarCompraInsumo(payload: {
     });
 
     if (!costoUnitarioCalculado) {
-      throw new Error("No fue posible calcular costo unitario para la compra");
+      throw new ValidationError("No fue posible calcular costo unitario para la compra");
     }
 
     const cantidadConvertida = convertQuantity(
@@ -71,7 +72,9 @@ export async function registrarCompraInsumo(payload: {
       unidadBase,
     );
     if (!cantidadConvertida) {
-      throw new Error("La unidad de compra no es compatible con la unidad base del insumo");
+      throw new ValidationError(
+        "La unidad de compra no es compatible con la unidad base del insumo",
+      );
     }
 
     const compra = await tx.compraInsumo.create({
@@ -134,7 +137,7 @@ export async function registrarMovimientoInventario(payload: {
       where: { id: payload.insumoId, ownerId: payload.ownerId },
     });
     if (!insumo) {
-      throw new Error("Insumo no encontrado");
+      throw new NotFoundError("Insumo no encontrado");
     }
 
     const inventario = await ensureInventarioInsumo(payload.insumoId, tx);
@@ -185,10 +188,10 @@ export async function registrarProduccionReceta(payload: {
     });
 
     if (!receta) {
-      throw new Error("Receta no encontrada");
+      throw new NotFoundError("Receta no encontrada");
     }
     if (receta.ingredientes.length === 0) {
-      throw new Error("La receta no tiene ingredientes para producir");
+      throw new ValidationError("La receta no tiene ingredientes para producir");
     }
 
     const fechaMovimiento = payload.fechaProduccion ?? new Date();
@@ -216,7 +219,7 @@ export async function registrarProduccionReceta(payload: {
 
     for (const item of receta.ingredientes) {
       if (item.insumo.ownerId !== payload.ownerId) {
-        throw new Error("Ingrediente fuera del alcance del usuario");
+        throw new ValidationError("Ingrediente fuera del alcance del usuario");
       }
 
       const cantidadBase = decimalToNumber(item.cantidad);
@@ -283,10 +286,10 @@ export async function anularProduccion(payload: {
     });
 
     if (!produccion) {
-      throw new Error("Producción no encontrada");
+      throw new NotFoundError("Producción no encontrada");
     }
     if (produccion.estado === "ANULADA") {
-      throw new Error("Esta producción ya fue anulada");
+      throw new ValidationError("Esta producción ya fue anulada");
     }
 
     await tx.produccion.update({
@@ -332,13 +335,13 @@ export async function editarProduccion(payload: {
     });
 
     if (!produccionOriginal) {
-      throw new Error("Producción no encontrada");
+      throw new NotFoundError("Producción no encontrada");
     }
     if (produccionOriginal.estado === "ANULADA") {
-      throw new Error("No se puede editar una producción anulada");
+      throw new ValidationError("No se puede editar una producción anulada");
     }
     if (!produccionOriginal.recetaId) {
-      throw new Error("La receta asociada ya no existe");
+      throw new NotFoundError("La receta asociada ya no existe");
     }
 
     await tx.produccion.update({
@@ -377,7 +380,7 @@ export async function editarProduccion(payload: {
     });
 
     if (!receta) {
-      throw new Error("La receta asociada ya no existe");
+      throw new NotFoundError("La receta asociada ya no existe");
     }
 
     let costoTotal = 0;

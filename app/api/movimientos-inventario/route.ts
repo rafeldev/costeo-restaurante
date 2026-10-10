@@ -1,5 +1,6 @@
 import { TipoMovimientoInventario, UnidadBase } from "@prisma/client";
 import { NextResponse } from "next/server";
+import { handleRouteError } from "@/lib/api-errors";
 import { UnauthorizedError, requireAuthUser, unauthorizedResponse } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { registrarMovimientoInventario } from "@/lib/inventory";
@@ -87,15 +88,6 @@ export async function POST(request: Request) {
 
     return NextResponse.json(result, { status: 201 });
   } catch (error) {
-    if (error instanceof UnauthorizedError) {
-      return unauthorizedResponse();
-    }
-    if (error instanceof Error) {
-      return NextResponse.json({ message: error.message }, { status: 400 });
-    }
-    return NextResponse.json(
-      { message: "No se pudo registrar el movimiento." },
-      { status: 500 },
-    );
+    return handleRouteError(error);
   }
 }
