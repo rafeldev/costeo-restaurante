@@ -97,12 +97,10 @@ async function crearProduccionConConsumos(
     const costoAplicado = cantidadDescontada * costoUnitario;
     costoTotal += costoAplicado;
 
-    const inventario = await ensureInventarioInsumo(item.insumoId, tx);
+    await ensureInventarioInsumo(item.insumoId, tx);
     const updatedInventario = await tx.inventarioInsumo.update({
       where: { insumoId: item.insumoId },
-      data: {
-        stockActual: decimalToNumber(inventario.stockActual) - cantidadDescontada,
-      },
+      data: { stockActual: { decrement: cantidadDescontada } },
     });
     await tx.movimientoInventario.create({
       data: {
@@ -137,19 +135,20 @@ async function revertirMovimientosProduccion(
   produccion: ProduccionConMovimientos,
   motivo: string,
 ) {
-  await tx.produccion.update({
-    where: { id: produccion.id },
+  const anulada = await tx.produccion.updateMany({
+    where: { id: produccion.id, estado: "ACTIVA" },
     data: { estado: "ANULADA" },
   });
+  if (anulada.count === 0) {
+    throw new ValidationError("Esta producción ya fue anulada");
+  }
 
   for (const movimiento of produccion.movimientos) {
     const cantidadDevuelta = decimalToNumber(movimiento.cantidad);
-    const inventario = await ensureInventarioInsumo(movimiento.insumoId, tx);
+    await ensureInventarioInsumo(movimiento.insumoId, tx);
     await tx.inventarioInsumo.update({
       where: { insumoId: movimiento.insumoId },
-      data: {
-        stockActual: decimalToNumber(inventario.stockActual) + cantidadDevuelta,
-      },
+      data: { stockActual: { increment: cantidadDevuelta } },
     });
     await tx.movimientoInventario.create({
       data: {
@@ -233,11 +232,10 @@ export async function registrarCompraInsumo(payload: {
       },
     });
 
-    const inventario = await ensureInventarioInsumo(payload.insumoId, tx);
-    const stockActual = decimalToNumber(inventario.stockActual) + cantidadConvertida;
+    await ensureInventarioInsumo(payload.insumoId, tx);
     const updatedInventario = await tx.inventarioInsumo.update({
       where: { insumoId: payload.insumoId },
-      data: { stockActual },
+      data: { stockActual: { increment: cantidadConvertida } },
     });
 
     await tx.movimientoInventario.create({
@@ -277,9 +275,8 @@ export async function registrarMovimientoInventario(payload: {
       throw new NotFoundError("Insumo no encontrado");
     }
 
-    const inventario = await ensureInventarioInsumo(payload.insumoId, tx);
+    await ensureInventarioInsumo(payload.insumoId, tx);
     const delta = getDeltaFromMovimiento(payload.tipo, payload.cantidad);
-    const nextStock = decimalToNumber(inventario.stockActual) + delta;
 
     await tx.movimientoInventario.create({
       data: {
@@ -293,7 +290,7 @@ export async function registrarMovimientoInventario(payload: {
 
     const updatedInventario = await tx.inventarioInsumo.update({
       where: { insumoId: payload.insumoId },
-      data: { stockActual: nextStock },
+      data: { stockActual: { increment: delta } },
     });
 
     return {

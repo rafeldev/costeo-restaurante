@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
+    "test:integration": "test -n \"$DATABASE_URL_TEST\" && DATABASE_URL=\"$DATABASE_URL_TEST\" prisma migrate deploy && DATABASE_URL=\"$DATABASE_URL_TEST\" vitest run --config vitest.integration.config.ts",
     "test:watch": "vitest",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",

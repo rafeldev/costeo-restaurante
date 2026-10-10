@@ -51,7 +51,13 @@ vi.mock("@/lib/db", () => {
       },
       update: async ({ where, data }: { where: Row; data: Row }) => {
         const row = store.inventarios.find((r) => matches(r, where))!;
-        Object.assign(row, data);
+        const stockUpdate = data.stockActual;
+        if (stockUpdate && typeof stockUpdate === "object") {
+          if ("increment" in stockUpdate) row.stockActual += stockUpdate.increment;
+          if ("decrement" in stockUpdate) row.stockActual -= stockUpdate.decrement;
+        } else {
+          Object.assign(row, data);
+        }
         return row;
       },
     },
@@ -76,6 +82,11 @@ vi.mock("@/lib/db", () => {
         const row = store.producciones.find((r) => matches(r, where))!;
         Object.assign(row, data);
         return row;
+      },
+      updateMany: async ({ where, data }: { where: Row; data: Row }) => {
+        const rows = store.producciones.filter((r) => matches(r, where));
+        rows.forEach((row) => Object.assign(row, data));
+        return { count: rows.length };
       },
       findFirst: async ({ where }: { where: Row }) => {
         const row = store.producciones.find((r) => matches(r, where));
