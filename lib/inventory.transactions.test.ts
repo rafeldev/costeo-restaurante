@@ -333,4 +333,18 @@ describe("producciones", () => {
       editarProduccion({ ownerId: OWNER, produccionId, nuevasUnidades: 1 }),
     ).rejects.toThrow("receta asociada ya no existe");
   });
+
+  it("editar: rechaza ingredientes de otro usuario", async () => {
+    setupReceta();
+    const { produccionId } = await registrarProduccionReceta({
+      ownerId: OWNER,
+      recetaId: "rec-1",
+      unidades: 1,
+    });
+    store.recetas[0]!.ingredientes[0]!.insumo.ownerId = OTHER;
+
+    await expect(
+      editarProduccion({ ownerId: OWNER, produccionId, nuevasUnidades: 2 }),
+    ).rejects.toThrow("fuera del alcance");
+  });
 });

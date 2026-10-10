@@ -1,3 +1,4 @@
+import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import type { TipoMovimientoValue, UnidadBaseValue } from "@/lib/domain";
 import { NotFoundError, ValidationError } from "@/lib/errors";
@@ -9,6 +10,30 @@ type InventarioClient = {
   inventarioInsumo: {
     upsert: typeof db.inventarioInsumo.upsert;
   };
+};
+
+type RecetaProduccion = {
+  id: string;
+  nombre: string;
+  ingredientes: Array<{
+    insumoId: string;
+    cantidad: DecimalLike | number;
+    insumo: {
+      ownerId: string;
+      nombre: string;
+      costoUnidad: DecimalLike | number;
+      mermaPct: DecimalLike | number;
+    };
+  }>;
+};
+
+type ProduccionConMovimientos = {
+  id: string;
+  recetaNombre: string;
+  movimientos: Array<{
+    insumoId: string;
+    cantidad: DecimalLike | number;
+  }>;
 };
 
 function decimalToNumber(value: DecimalLike | number): number {
@@ -25,6 +50,118 @@ async function ensureInventarioInsumo(
     create: { insumoId, stockActual: 0, stockMinimo: 0 },
     update: {},
   });
+}
+
+async function crearProduccionConConsumos(
+  tx: Prisma.TransactionClient,
+  payload: {
+    ownerId: string;
+    receta: RecetaProduccion;
+    unidades: number;
+    fecha: Date;
+  },
+) {
+  if (payload.receta.ingredientes.length === 0) {
+    throw new ValidationError("La receta no tiene ingredientes para producir");
+  }
+  if (payload.receta.ingredientes.some((item) => item.insumo.ownerId !== payload.ownerId)) {
+    throw new ValidationError("Ingrediente fuera del alcance del usuario");
+  }
+
+  let costoTotal = 0;
+  const consumos: Array<{
+    insumoId: string;
+    nombre: string;
+    cantidadDescontada: number;
+    costoAplicado: number;
+    stockActual: number;
+    stockMinimo: number;
+  }> = [];
+  const produccion = await tx.produccion.create({
+    data: {
+      ownerId: payload.ownerId,
+      recetaId: payload.receta.id,
+      recetaNombre: payload.receta.nombre,
+      unidades: payload.unidades,
+      costoTotalProduccion: 0,
+      estado: "ACTIVA",
+      fechaProduccion: payload.fecha,
+    },
+  });
+
+  for (const item of payload.receta.ingredientes) {
+    const cantidadBase = decimalToNumber(item.cantidad);
+    const costoUnitario = decimalToNumber(item.insumo.costoUnidad);
+    const mermaPct = decimalToNumber(item.insumo.mermaPct);
+    const cantidadDescontada = cantidadBase * payload.unidades * (1 + mermaPct / 100);
+    const costoAplicado = cantidadDescontada * costoUnitario;
+    costoTotal += costoAplicado;
+
+    const inventario = await ensureInventarioInsumo(item.insumoId, tx);
+    const updatedInventario = await tx.inventarioInsumo.update({
+      where: { insumoId: item.insumoId },
+      data: {
+        stockActual: decimalToNumber(inventario.stockActual) - cantidadDescontada,
+      },
+    });
+    await tx.movimientoInventario.create({
+      data: {
+        insumoId: item.insumoId,
+        tipo: "SALIDA",
+        cantidad: cantidadDescontada,
+        motivo: `Producción receta ${payload.receta.nombre} x${payload.unidades}`,
+        fechaMovimiento: payload.fecha,
+        produccionId: produccion.id,
+      },
+    });
+    consumos.push({
+      insumoId: item.insumoId,
+      nombre: item.insumo.nombre,
+      cantidadDescontada,
+      costoAplicado,
+      stockActual: decimalToNumber(updatedInventario.stockActual),
+      stockMinimo: decimalToNumber(updatedInventario.stockMinimo),
+    });
+  }
+
+  const updated = await tx.produccion.update({
+    where: { id: produccion.id },
+    data: { costoTotalProduccion: costoTotal },
+  });
+
+  return { produccion: updated, costoTotal, consumos };
+}
+
+async function revertirMovimientosProduccion(
+  tx: Prisma.TransactionClient,
+  produccion: ProduccionConMovimientos,
+  motivo: string,
+) {
+  await tx.produccion.update({
+    where: { id: produccion.id },
+    data: { estado: "ANULADA" },
+  });
+
+  for (const movimiento of produccion.movimientos) {
+    const cantidadDevuelta = decimalToNumber(movimiento.cantidad);
+    const inventario = await ensureInventarioInsumo(movimiento.insumoId, tx);
+    await tx.inventarioInsumo.update({
+      where: { insumoId: movimiento.insumoId },
+      data: {
+        stockActual: decimalToNumber(inventario.stockActual) + cantidadDevuelta,
+      },
+    });
+    await tx.movimientoInventario.create({
+      data: {
+        insumoId: movimiento.insumoId,
+        tipo: "ENTRADA",
+        cantidad: cantidadDevuelta,
+        motivo,
+        fechaMovimiento: new Date(),
+        produccionId: produccion.id,
+      },
+    });
+  }
 }
 
 export async function registrarCompraInsumo(payload: {
@@ -190,87 +327,22 @@ export async function registrarProduccionReceta(payload: {
     if (!receta) {
       throw new NotFoundError("Receta no encontrada");
     }
-    if (receta.ingredientes.length === 0) {
-      throw new ValidationError("La receta no tiene ingredientes para producir");
-    }
-
     const fechaMovimiento = payload.fechaProduccion ?? new Date();
-    let costoTotal = 0;
-    const consumos: Array<{
-      insumoId: string;
-      nombre: string;
-      cantidadDescontada: number;
-      costoAplicado: number;
-      stockActual: number;
-      stockMinimo: number;
-    }> = [];
-
-    const produccion = await tx.produccion.create({
-      data: {
-        ownerId: payload.ownerId,
-        recetaId: receta.id,
-        recetaNombre: receta.nombre,
-        unidades: payload.unidades,
-        costoTotalProduccion: 0,
-        estado: "ACTIVA",
-        fechaProduccion: fechaMovimiento,
-      },
-    });
-
-    for (const item of receta.ingredientes) {
-      if (item.insumo.ownerId !== payload.ownerId) {
-        throw new ValidationError("Ingrediente fuera del alcance del usuario");
-      }
-
-      const cantidadBase = decimalToNumber(item.cantidad);
-      const costoUnitario = decimalToNumber(item.insumo.costoUnidad);
-      const mermaPct = decimalToNumber(item.insumo.mermaPct);
-      const factorMerma = 1 + mermaPct / 100;
-      const cantidadDescontada = cantidadBase * payload.unidades * factorMerma;
-      const costoAplicado = cantidadDescontada * costoUnitario;
-      costoTotal += costoAplicado;
-
-      const inventario = await ensureInventarioInsumo(item.insumoId, tx);
-      const nextStock = decimalToNumber(inventario.stockActual) - cantidadDescontada;
-      const updatedInventario = await tx.inventarioInsumo.update({
-        where: { insumoId: item.insumoId },
-        data: { stockActual: nextStock },
-      });
-
-      await tx.movimientoInventario.create({
-        data: {
-          insumoId: item.insumoId,
-          tipo: "SALIDA",
-          cantidad: cantidadDescontada,
-          motivo: `Producción receta ${receta.nombre} x${payload.unidades}`,
-          fechaMovimiento,
-          produccionId: produccion.id,
-        },
-      });
-
-      consumos.push({
-        insumoId: item.insumoId,
-        nombre: item.insumo.nombre,
-        cantidadDescontada,
-        costoAplicado,
-        stockActual: decimalToNumber(updatedInventario.stockActual),
-        stockMinimo: decimalToNumber(updatedInventario.stockMinimo),
-      });
-    }
-
-    const updated = await tx.produccion.update({
-      where: { id: produccion.id },
-      data: { costoTotalProduccion: costoTotal },
+    const result = await crearProduccionConConsumos(tx, {
+      ownerId: payload.ownerId,
+      receta,
+      unidades: payload.unidades,
+      fecha: fechaMovimiento,
     });
 
     return {
-      produccionId: updated.id,
+      produccionId: result.produccion.id,
       recetaId: receta.id,
       recetaNombre: receta.nombre,
       unidades: payload.unidades,
-      costoTotalProduccion: costoTotal,
+      costoTotalProduccion: result.costoTotal,
       fechaProduccion: fechaMovimiento,
-      consumos,
+      consumos: result.consumos,
     };
   });
 }
@@ -292,32 +364,11 @@ export async function anularProduccion(payload: {
       throw new ValidationError("Esta producción ya fue anulada");
     }
 
-    await tx.produccion.update({
-      where: { id: produccion.id },
-      data: { estado: "ANULADA" },
-    });
-
-    for (const mov of produccion.movimientos) {
-      const cantidadDevuelta = decimalToNumber(mov.cantidad);
-      const inventario = await ensureInventarioInsumo(mov.insumoId, tx);
-      const nextStock = decimalToNumber(inventario.stockActual) + cantidadDevuelta;
-
-      await tx.inventarioInsumo.update({
-        where: { insumoId: mov.insumoId },
-        data: { stockActual: nextStock },
-      });
-
-      await tx.movimientoInventario.create({
-        data: {
-          insumoId: mov.insumoId,
-          tipo: "ENTRADA",
-          cantidad: cantidadDevuelta,
-          motivo: `Anulación producción ${produccion.recetaNombre}`,
-          fechaMovimiento: new Date(),
-          produccionId: produccion.id,
-        },
-      });
-    }
+    await revertirMovimientosProduccion(
+      tx,
+      produccion,
+      `Anulación producción ${produccion.recetaNombre}`,
+    );
 
     return { produccionId: produccion.id, estado: "ANULADA" as const };
   });
@@ -344,34 +395,6 @@ export async function editarProduccion(payload: {
       throw new NotFoundError("La receta asociada ya no existe");
     }
 
-    await tx.produccion.update({
-      where: { id: produccionOriginal.id },
-      data: { estado: "ANULADA" },
-    });
-
-    for (const mov of produccionOriginal.movimientos) {
-      const cantidadDevuelta = decimalToNumber(mov.cantidad);
-      const inventario = await ensureInventarioInsumo(mov.insumoId, tx);
-      const nextStock = decimalToNumber(inventario.stockActual) + cantidadDevuelta;
-
-      await tx.inventarioInsumo.update({
-        where: { insumoId: mov.insumoId },
-        data: { stockActual: nextStock },
-      });
-
-      await tx.movimientoInventario.create({
-        data: {
-          insumoId: mov.insumoId,
-          tipo: "ENTRADA",
-          cantidad: cantidadDevuelta,
-          motivo: `Corrección producción ${produccionOriginal.recetaNombre}`,
-          fechaMovimiento: new Date(),
-          produccionId: produccionOriginal.id,
-        },
-      });
-    }
-
-    // Re-register with the corrected units but the original date
     const receta = await tx.receta.findFirst({
       where: { id: produccionOriginal.recetaId, ownerId: payload.ownerId },
       include: {
@@ -383,57 +406,23 @@ export async function editarProduccion(payload: {
       throw new NotFoundError("La receta asociada ya no existe");
     }
 
-    let costoTotal = 0;
-    const nuevaProduccion = await tx.produccion.create({
-      data: {
-        ownerId: payload.ownerId,
-        recetaId: receta.id,
-        recetaNombre: receta.nombre,
-        unidades: payload.nuevasUnidades,
-        costoTotalProduccion: 0,
-        estado: "ACTIVA",
-        fechaProduccion: produccionOriginal.fechaProduccion,
-      },
-    });
-
-    for (const item of receta.ingredientes) {
-      const cantidadBase = decimalToNumber(item.cantidad);
-      const costoUnitario = decimalToNumber(item.insumo.costoUnidad);
-      const mermaPct = decimalToNumber(item.insumo.mermaPct);
-      const factorMerma = 1 + mermaPct / 100;
-      const cantidadDescontada = cantidadBase * payload.nuevasUnidades * factorMerma;
-      costoTotal += cantidadDescontada * costoUnitario;
-
-      const inventario = await ensureInventarioInsumo(item.insumoId, tx);
-      const nextStock = decimalToNumber(inventario.stockActual) - cantidadDescontada;
-
-      await tx.inventarioInsumo.update({
-        where: { insumoId: item.insumoId },
-        data: { stockActual: nextStock },
-      });
-
-      await tx.movimientoInventario.create({
-        data: {
-          insumoId: item.insumoId,
-          tipo: "SALIDA",
-          cantidad: cantidadDescontada,
-          motivo: `Producción receta ${receta.nombre} x${payload.nuevasUnidades}`,
-          fechaMovimiento: produccionOriginal.fechaProduccion,
-          produccionId: nuevaProduccion.id,
-        },
-      });
-    }
-
-    await tx.produccion.update({
-      where: { id: nuevaProduccion.id },
-      data: { costoTotalProduccion: costoTotal },
+    await revertirMovimientosProduccion(
+      tx,
+      produccionOriginal,
+      `Corrección producción ${produccionOriginal.recetaNombre}`,
+    );
+    const result = await crearProduccionConConsumos(tx, {
+      ownerId: payload.ownerId,
+      receta,
+      unidades: payload.nuevasUnidades,
+      fecha: produccionOriginal.fechaProduccion,
     });
 
     return {
       produccionAnuladaId: produccionOriginal.id,
-      nuevaProduccionId: nuevaProduccion.id,
+      nuevaProduccionId: result.produccion.id,
       unidades: payload.nuevasUnidades,
-      costoTotalProduccion: costoTotal,
+      costoTotalProduccion: result.costoTotal,
     };
   });
 }
