@@ -8,7 +8,12 @@ import {
   ValidationError,
 } from "@/lib/errors";
 import { getDeltaFromMovimiento, getEstadoReposicion } from "@/lib/inventory-rules";
-import { calculateUnitCostFromPurchase, convertQuantity } from "@/lib/unit-conversion";
+import { assertInventoryMovementAllowed } from "@/lib/inventory-lock";
+import {
+  applyWasteYield,
+  calculateUnitCostFromPurchase,
+  convertQuantity,
+} from "@/lib/unit-conversion";
 
 type DecimalLike = { toNumber: () => number };
 type InventarioClient = {
@@ -99,7 +104,10 @@ async function crearProduccionConConsumos(
     const cantidadBase = decimalToNumber(item.cantidad);
     const costoUnitario = decimalToNumber(item.insumo.costoUnidad);
     const mermaPct = decimalToNumber(item.insumo.mermaPct);
-    const cantidadDescontada = cantidadBase * payload.unidades * (1 + mermaPct / 100);
+    const cantidadDescontada = applyWasteYield(
+      cantidadBase * payload.unidades,
+      mermaPct,
+    );
     const costoAplicado = cantidadDescontada * costoUnitario;
     costoTotal += costoAplicado;
 
@@ -182,7 +190,7 @@ async function revertirMovimientosProduccion(
   }
 }
 
-export async function registrarCompraInsumo(payload: {
+export type RegistrarCompraInsumoPayload = {
   ownerId: string;
   insumoId: string;
   proveedorId?: string | null;
@@ -190,92 +198,101 @@ export async function registrarCompraInsumo(payload: {
   cantidadCompra: number;
   unidadCompra: UnidadBaseValue;
   precioTotal: number;
-}) {
-  return db.$transaction(async (tx) => {
-    const insumo = await tx.insumo.findFirst({
-      where: { id: payload.insumoId, ownerId: payload.ownerId },
+  actualizaCosto?: boolean;
+};
+
+export async function registrarCompraInsumoEnTransaccion(
+  tx: Prisma.TransactionClient,
+  payload: RegistrarCompraInsumoPayload,
+) {
+  await assertInventoryMovementAllowed(tx, payload.ownerId);
+  const insumo = await tx.insumo.findFirst({
+    where: { id: payload.insumoId, ownerId: payload.ownerId },
+  });
+  if (!insumo) {
+    throw new NotFoundError("Insumo no encontrado");
+  }
+
+  if (payload.proveedorId) {
+    const proveedor = await tx.proveedor.findFirst({
+      where: { id: payload.proveedorId, ownerId: payload.ownerId },
+      select: { id: true },
     });
-    if (!insumo) {
-      throw new NotFoundError("Insumo no encontrado");
+    if (!proveedor) {
+      throw new NotFoundError("Proveedor no encontrado para el usuario");
     }
+  }
 
-    if (payload.proveedorId) {
-      const proveedor = await tx.proveedor.findFirst({
-        where: { id: payload.proveedorId, ownerId: payload.ownerId },
-        select: { id: true },
-      });
-      if (!proveedor) {
-        throw new NotFoundError("Proveedor no encontrado para el usuario");
-      }
-    }
+  const unidadBase = insumo.unidadBase as UnidadBaseValue;
+  const costoUnitarioCalculado = calculateUnitCostFromPurchase({
+    precioCompra: payload.precioTotal,
+    cantidadCompra: payload.cantidadCompra,
+    unidadCompra: payload.unidadCompra,
+    unidadBase,
+  });
 
-    const unidadBase = insumo.unidadBase as UnidadBaseValue;
-    const costoUnitarioCalculado = calculateUnitCostFromPurchase({
-      precioCompra: payload.precioTotal,
+  if (!costoUnitarioCalculado) {
+    throw new ValidationError("No fue posible calcular costo unitario para la compra");
+  }
+
+  const cantidadConvertida = convertQuantity(
+    payload.cantidadCompra,
+    payload.unidadCompra,
+    unidadBase,
+  );
+  if (!cantidadConvertida) {
+    throw new ValidationError(
+      "La unidad de compra no es compatible con la unidad base del insumo",
+    );
+  }
+
+  const compra = await tx.compraInsumo.create({
+    data: {
+      insumoId: payload.insumoId,
+      proveedorId: payload.proveedorId ?? null,
+      fechaCompra: payload.fechaCompra ?? new Date(),
       cantidadCompra: payload.cantidadCompra,
       unidadCompra: payload.unidadCompra,
-      unidadBase,
-    });
+      precioTotal: payload.precioTotal,
+      costoUnitarioCalculado,
+    },
+  });
 
-    if (!costoUnitarioCalculado) {
-      throw new ValidationError("No fue posible calcular costo unitario para la compra");
-    }
-
-    const cantidadConvertida = convertQuantity(
-      payload.cantidadCompra,
-      payload.unidadCompra,
-      unidadBase,
-    );
-    if (!cantidadConvertida) {
-      throw new ValidationError(
-        "La unidad de compra no es compatible con la unidad base del insumo",
-      );
-    }
-
-    const compra = await tx.compraInsumo.create({
-      data: {
-        insumoId: payload.insumoId,
-        proveedorId: payload.proveedorId ?? null,
-        fechaCompra: payload.fechaCompra ?? new Date(),
-        cantidadCompra: payload.cantidadCompra,
-        unidadCompra: payload.unidadCompra,
-        precioTotal: payload.precioTotal,
-        costoUnitarioCalculado,
-      },
-    });
-
+  if (payload.actualizaCosto !== false) {
     await tx.insumo.update({
       where: { id: payload.insumoId },
-      data: {
-        costoUnidad: costoUnitarioCalculado,
-      },
+      data: { costoUnidad: costoUnitarioCalculado },
     });
+  }
 
-    await ensureInventarioInsumo(payload.insumoId, tx);
-    const updatedInventario = await tx.inventarioInsumo.update({
-      where: { insumoId: payload.insumoId },
-      data: { stockActual: { increment: cantidadConvertida } },
-    });
-
-    await tx.movimientoInventario.create({
-      data: {
-        insumoId: payload.insumoId,
-        tipo: "ENTRADA",
-        cantidad: cantidadConvertida,
-        motivo: "Entrada por compra",
-        referenciaCompraId: compra.id,
-        fechaMovimiento: payload.fechaCompra ?? new Date(),
-      },
-    });
-
-    return {
-      compra,
-      inventario: {
-        stockActual: decimalToNumber(updatedInventario.stockActual),
-        stockMinimo: decimalToNumber(updatedInventario.stockMinimo),
-      },
-    };
+  await ensureInventarioInsumo(payload.insumoId, tx);
+  const updatedInventario = await tx.inventarioInsumo.update({
+    where: { insumoId: payload.insumoId },
+    data: { stockActual: { increment: cantidadConvertida } },
   });
+
+  await tx.movimientoInventario.create({
+    data: {
+      insumoId: payload.insumoId,
+      tipo: "ENTRADA",
+      cantidad: cantidadConvertida,
+      motivo: "Entrada por compra",
+      referenciaCompraId: compra.id,
+      fechaMovimiento: payload.fechaCompra ?? new Date(),
+    },
+  });
+
+  return {
+    compra,
+    inventario: {
+      stockActual: decimalToNumber(updatedInventario.stockActual),
+      stockMinimo: decimalToNumber(updatedInventario.stockMinimo),
+    },
+  };
+}
+
+export async function registrarCompraInsumo(payload: RegistrarCompraInsumoPayload) {
+  return db.$transaction((tx) => registrarCompraInsumoEnTransaccion(tx, payload));
 }
 
 export async function registrarMovimientoInventario(payload: {
@@ -287,6 +304,7 @@ export async function registrarMovimientoInventario(payload: {
   fechaMovimiento?: Date;
 }) {
   return db.$transaction(async (tx) => {
+    await assertInventoryMovementAllowed(tx, payload.ownerId);
     const insumo = await tx.insumo.findFirst({
       where: { id: payload.insumoId, ownerId: payload.ownerId },
     });
@@ -311,6 +329,9 @@ export async function registrarMovimientoInventario(payload: {
       where: { insumoId: payload.insumoId },
       data: { stockActual: { increment: delta } },
     });
+    if (decimalToNumber(updatedInventario.stockActual) < 0) {
+      throw new ValidationError("El movimiento dejaría el inventario con stock negativo");
+    }
 
     return {
       stockActual: decimalToNumber(updatedInventario.stockActual),
@@ -330,6 +351,7 @@ export async function registrarProduccionReceta(payload: {
   fechaProduccion?: Date;
 }) {
   return db.$transaction(async (tx) => {
+    await assertInventoryMovementAllowed(tx, payload.ownerId);
     const receta = await tx.receta.findFirst({
       where: { id: payload.recetaId, ownerId: payload.ownerId },
       include: {
@@ -368,6 +390,7 @@ export async function anularProduccion(payload: {
   produccionId: string;
 }) {
   return db.$transaction(async (tx) => {
+    await assertInventoryMovementAllowed(tx, payload.ownerId);
     const produccion = await tx.produccion.findFirst({
       where: { id: payload.produccionId, ownerId: payload.ownerId },
       include: { movimientos: true },
@@ -396,6 +419,7 @@ export async function editarProduccion(payload: {
   nuevasUnidades: number;
 }) {
   return db.$transaction(async (tx) => {
+    await assertInventoryMovementAllowed(tx, payload.ownerId);
     const produccionOriginal = await tx.produccion.findFirst({
       where: { id: payload.produccionId, ownerId: payload.ownerId },
       include: { movimientos: true },

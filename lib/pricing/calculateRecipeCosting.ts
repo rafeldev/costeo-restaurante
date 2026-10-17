@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import type { CosteoResultado } from "@/lib/domain";
 import { NotFoundError, ValidationError } from "@/lib/errors";
 import { calculateSuggestedPrice } from "@/lib/pricing/calculateSuggestedPrice";
+import { applyWasteYield } from "@/lib/unit-conversion";
 
 type DecimalLike = { toNumber: () => number };
 
@@ -47,14 +48,15 @@ export async function calculateRecipeCosting(
     const cantidad = decimalToNumber(item.cantidad);
     const costoUnitario = decimalToNumber(item.insumo.costoUnidad);
     const mermaPct = decimalToNumber(item.insumo.mermaPct);
-    const factorMerma = 1 + mermaPct / 100;
-    const costoAplicado = cantidad * costoUnitario * factorMerma;
+    const costoNetoUnitario = applyWasteYield(1, mermaPct) * costoUnitario;
+    const costoAplicado = cantidad * costoNetoUnitario;
 
     return {
       insumoId: item.insumoId,
       nombre: item.insumo.nombre,
       cantidad,
       costoUnitario,
+      costoNetoUnitario,
       mermaPct,
       costoAplicado,
     };
@@ -83,6 +85,7 @@ export async function calculateRecipeCosting(
     costoPorPorcion: pricing.costoPorPorcion,
     precioSugeridoSinImpuesto: pricing.precioSugeridoSinImpuesto,
     precioSugeridoFinal: pricing.precioSugeridoFinal,
+    impuestoPct: decimalToNumber(config.impuestoPct),
     margenRealPct: pricing.margenRealPct,
     semaforoRentabilidad: pricing.semaforoRentabilidad,
     desgloseIngredientes,

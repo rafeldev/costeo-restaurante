@@ -15,7 +15,11 @@ export async function GET() {
       },
       include: {
         insumo: {
-          select: { id: true, nombre: true },
+          select: {
+            id: true,
+            nombre: true,
+            proveedorPreferido: { select: { id: true, nombre: true } },
+          },
         },
       },
       orderBy: { updatedAt: "desc" },
@@ -24,12 +28,24 @@ export async function GET() {
     const data = inventarios.map((item) => {
       const stockActual = decimalToNumber(item.stockActual) ?? 0;
       const stockMinimo = decimalToNumber(item.stockMinimo) ?? 0;
+      const estadoReposicion = getEstadoReposicion(stockActual, stockMinimo);
       return {
         insumoId: item.insumoId,
         nombre: item.insumo.nombre,
         stockActual,
         stockMinimo,
-        estadoReposicion: getEstadoReposicion(stockActual, stockMinimo),
+        estadoReposicion,
+        desviacionPct:
+          stockMinimo > 0
+            ? Number((((stockActual - stockMinimo) / stockMinimo) * 100).toFixed(2))
+            : null,
+        estado:
+          estadoReposicion === "rojo"
+            ? "Crítico"
+            : estadoReposicion === "amarillo"
+              ? "Reorden"
+              : "Sano",
+        proveedorPreferido: item.insumo.proveedorPreferido,
       };
     });
 

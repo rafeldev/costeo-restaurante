@@ -16,7 +16,7 @@ export default function RecetasPage() {
   return (
     <PageContainer
       title="Recetas"
-      description="Construye recetas con insumos y calcula su precio sugerido."
+      description="Fichas técnicas, escandallos y rentabilidad de tu menú."
     >
       <Suspense>
         <RecetasContent />

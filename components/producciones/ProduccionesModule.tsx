@@ -11,6 +11,7 @@ import { formatMoney } from "@/lib/format";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { LoadingState } from "@/components/ui/LoadingState";
+import { ErrorState } from "@/components/ui/ErrorState";
 import { toast } from "sonner";
 
 type RangoKey = "hoy" | "semana" | "mes";
@@ -59,6 +60,7 @@ export function ProduccionesModule({ filterRecetaId }: Props = {}) {
   const [producciones, setProducciones] = useState<ProduccionDTO[]>([]);
   const [resumen, setResumen] = useState<ProduccionResumenDTO | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [rango, setRango] = useState<RangoKey>("hoy");
   const [anularId, setAnularId] = useState<string | null>(null);
   const [editarId, setEditarId] = useState<string | null>(null);
@@ -66,6 +68,7 @@ export function ProduccionesModule({ filterRecetaId }: Props = {}) {
 
   const loadData = useCallback(async () => {
     setLoading(true);
+    setLoadError("");
     try {
       const params = new URLSearchParams();
       if (filterRecetaId) params.set("recetaId", filterRecetaId);
@@ -87,7 +90,7 @@ export function ProduccionesModule({ filterRecetaId }: Props = {}) {
       setProducciones(prodData);
       setResumen(resumenData);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Error inesperado");
+      setLoadError(error instanceof Error ? error.message : "Error inesperado");
     } finally {
       setLoading(false);
     }
@@ -238,15 +241,16 @@ export function ProduccionesModule({ filterRecetaId }: Props = {}) {
         </section>
       ) : null}
 
-      <section className="surface-card p-4 sm:p-5">
+      <section className="surface-card p-4 sm:p-5" data-tour="producciones-historial">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-base font-semibold text-primary sm:text-lg">Historial</h2>
           <span className="text-sm text-secondary">{producciones.length} registros</span>
         </div>
 
         {loading ? <LoadingState message="Cargando producciones…" /> : null}
+        {!loading && loadError ? <ErrorState message={loadError} onRetry={() => void loadData()} /> : null}
 
-        {!loading && producciones.length === 0 ? (
+        {!loading && !loadError && producciones.length === 0 ? (
           <EmptyState
             title="Sin producciones registradas"
             description={
@@ -257,7 +261,7 @@ export function ProduccionesModule({ filterRecetaId }: Props = {}) {
           />
         ) : null}
 
-        {!loading && producciones.length > 0 ? (
+        {!loading && !loadError && producciones.length > 0 ? (
           <div className="space-y-2">
             {producciones.map((p) => {
               const isAnulada = p.estado === "ANULADA";

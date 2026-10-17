@@ -6,9 +6,13 @@ const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
 };
 
-const rawConnectionString =
-  process.env.DATABASE_URL ??
-  "postgresql://johndoe:randompassword@localhost:5432/mydb?schema=public";
+const rawConnectionString = process.env.DATABASE_URL ??
+  (process.env.NODE_ENV === "test"
+    ? "postgresql://test:test@localhost:5432/test?schema=public"
+    : undefined);
+if (!rawConnectionString) {
+  throw new Error("DATABASE_URL es obligatoria");
+}
 
 const parsedUrl = new URL(rawConnectionString);
 const isLocalConnection =
@@ -17,26 +21,25 @@ const sslMode = parsedUrl.searchParams.get("sslmode")?.toLowerCase();
 parsedUrl.searchParams.delete("sslmode");
 const connectionString = parsedUrl.toString();
 
-function resolveSslConfig() {
+function resolveSslConfig(): false | { rejectUnauthorized: boolean } {
   if (isLocalConnection || sslMode === "disable") {
     return false;
   }
 
-  // Supabase pooler often requires TLS without certificate verification.
   if (!sslMode || sslMode === "require" || sslMode === "no-verify") {
     return { rejectUnauthorized: false };
   }
 
-  if (sslMode === "verify-ca" || sslMode === "verify-full") {
-    return { rejectUnauthorized: true };
-  }
-
-  return { rejectUnauthorized: false };
+  return { rejectUnauthorized: true };
 }
 
 const pool = new Pool({
   connectionString,
   ssl: resolveSslConfig(),
+  max: Number(process.env.DATABASE_POOL_MAX ?? 5),
+  connectionTimeoutMillis: 10_000,
+  idleTimeoutMillis: 10_000,
+  allowExitOnIdle: true,
 });
 const adapter = new PrismaPg(pool);
 

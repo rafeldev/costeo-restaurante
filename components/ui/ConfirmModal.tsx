@@ -26,14 +26,36 @@ export function ConfirmModal({
   children,
 }: ConfirmModalProps) {
   const cancelRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     if (!open) return;
+    previousFocusRef.current = document.activeElement as HTMLElement | null;
+    cancelRef.current?.focus();
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === "Escape") onCancel();
+      if (e.key === "Tab") {
+        const focusable = dialogRef.current?.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        );
+        if (!focusable?.length) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
     };
     document.addEventListener("keydown", handleEscape);
-    return () => document.removeEventListener("keydown", handleEscape);
+    return () => {
+      document.removeEventListener("keydown", handleEscape);
+      previousFocusRef.current?.focus();
+    };
   }, [open, onCancel]);
 
   if (!open) return null;
@@ -46,14 +68,14 @@ export function ConfirmModal({
       role="dialog"
       aria-modal="true"
       aria-labelledby="confirm-modal-title"
-      aria-describedby="confirm-modal-desc"
+      aria-describedby={description ? "confirm-modal-desc" : undefined}
     >
       <div
         className="absolute inset-0 bg-[var(--ink)]/40"
         aria-hidden
         onClick={onCancel}
       />
-      <div className="surface-card relative z-10 w-full max-w-md p-5 shadow-lg sm:p-6">
+      <div ref={dialogRef} className="surface-card relative z-10 w-full max-w-md p-5 shadow-lg sm:p-6">
         <h2 id="confirm-modal-title" className="text-lg font-semibold text-primary">
           {title}
         </h2>

@@ -1,6 +1,6 @@
 import { withAuth } from "next-auth/middleware";
 
-const publicRoutes = ["/login"];
+const publicRoutes = ["/login", "/privacidad", "/terminos"];
 
 export default withAuth(
   function proxy() {

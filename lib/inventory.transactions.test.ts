@@ -11,6 +11,7 @@ const store = vi.hoisted(() => ({
   movimientos: [] as Row[],
   producciones: [] as Row[],
   compras: [] as Row[],
+  tomas: [] as Row[],
   seq: 0,
 }));
 
@@ -20,6 +21,11 @@ vi.mock("@/lib/db", () => {
     Object.entries(where).every(([key, value]) => row[key] === value);
 
   const tx = {
+    $queryRaw: async () => [],
+    tomaInventario: {
+      findFirst: async ({ where }: { where: Row }) =>
+        store.tomas.find((r) => matches(r, where)) ?? null,
+    },
     insumo: {
       findFirst: async ({ where }: { where: Row }) =>
         store.insumos.find((r) => matches(r, where)) ?? null,
@@ -118,6 +124,7 @@ import {
   anularProduccion,
   editarProduccion,
   registrarCompraInsumo,
+  registrarMovimientoInventario,
   registrarProduccionReceta,
 } from "./inventory";
 
@@ -161,7 +168,30 @@ beforeEach(() => {
   store.movimientos.length = 0;
   store.producciones.length = 0;
   store.compras.length = 0;
+  store.tomas.length = 0;
   store.seq = 0;
+});
+
+describe("bloqueo por toma de inventario", () => {
+  it.each([
+    ["compra", () => registrarCompraInsumo({ ownerId: OWNER, insumoId: "ins-1", cantidadCompra: 1, unidadCompra: "GRAMO", precioTotal: 100 })],
+    ["movimiento manual", () => registrarMovimientoInventario({ ownerId: OWNER, insumoId: "ins-1", tipo: "ENTRADA", cantidad: 1 })],
+    ["producción", () => registrarProduccionReceta({ ownerId: OWNER, recetaId: "rec-1", unidades: 1 })],
+    ["anulación", () => anularProduccion({ ownerId: OWNER, produccionId: "prod-1" })],
+    ["edición", () => editarProduccion({ ownerId: OWNER, produccionId: "prod-1", nuevasUnidades: 2 })],
+  ])("deniega %s antes de escribir stock o movimientos", async (_label, operation) => {
+    store.tomas.push({ id: "toma-1", ownerId: OWNER, periodo: "2026-10", estado: "EN_CURSO" });
+
+    await expect(operation()).rejects.toMatchObject({
+      code: "INVENTORY_COUNT_OPEN",
+      tomaId: "toma-1",
+      periodo: "2026-10",
+    });
+    expect(store.inventarios).toHaveLength(0);
+    expect(store.movimientos).toHaveLength(0);
+    expect(store.compras).toHaveLength(0);
+    expect(store.producciones).toHaveLength(0);
+  });
 });
 
 describe("registrarCompraInsumo", () => {
@@ -230,6 +260,79 @@ describe("registrarCompraInsumo", () => {
       }),
     ).rejects.toThrow("Proveedor no encontrado");
   });
+
+  it("registra stock sin cambiar el costo cuando actualizaCosto es falso", async () => {
+    seedInsumo({ costoUnidad: 7 });
+
+    await registrarCompraInsumo({
+      ownerId: OWNER,
+      insumoId: "ins-1",
+      cantidadCompra: 1,
+      unidadCompra: "KILOGRAMO",
+      precioTotal: 12000,
+      actualizaCosto: false,
+    });
+
+    expect(store.insumos[0]?.costoUnidad).toBe(7);
+    expect(stockOf("ins-1")).toBe(1000);
+  });
+});
+
+describe("registrarMovimientoInventario", () => {
+  it("permite una salida que deja el stock exactamente en cero", async () => {
+    seedInsumo();
+    store.inventarios.push({ insumoId: "ins-1", stockActual: 5, stockMinimo: 2 });
+
+    const result = await registrarMovimientoInventario({
+      ownerId: OWNER,
+      insumoId: "ins-1",
+      tipo: "SALIDA",
+      cantidad: 5,
+      motivo: "Consumo interno",
+    });
+
+    expect(result).toEqual({ stockActual: 0, stockMinimo: 2, estado: "rojo" });
+    expect(store.movimientos).toHaveLength(1);
+    expect(store.movimientos[0]).toMatchObject({ tipo: "SALIDA", cantidad: 5 });
+  });
+
+  it.each([
+    ["SALIDA", 6],
+    ["AJUSTE", -6],
+  ] as const)("revierte un %s que dejaría stock negativo", async (tipo, cantidad) => {
+    seedInsumo();
+    store.inventarios.push({ insumoId: "ins-1", stockActual: 5, stockMinimo: 2 });
+
+    await expect(
+      registrarMovimientoInventario({
+        ownerId: OWNER,
+        insumoId: "ins-1",
+        tipo,
+        cantidad,
+        motivo: "Corrección de prueba",
+      }),
+    ).rejects.toThrow("dejaría el inventario con stock negativo");
+
+    expect(stockOf("ins-1")).toBe(5);
+    expect(store.movimientos).toHaveLength(0);
+  });
+
+  it("rechaza un movimiento sobre un insumo de otro owner sin escribir", async () => {
+    seedInsumo({ ownerId: OTHER });
+    store.inventarios.push({ insumoId: "ins-1", stockActual: 5, stockMinimo: 0 });
+
+    await expect(
+      registrarMovimientoInventario({
+        ownerId: OWNER,
+        insumoId: "ins-1",
+        tipo: "ENTRADA",
+        cantidad: 1,
+      }),
+    ).rejects.toThrow("Insumo no encontrado");
+
+    expect(stockOf("ins-1")).toBe(5);
+    expect(store.movimientos).toHaveLength(0);
+  });
 });
 
 describe("producciones", () => {
@@ -248,14 +351,14 @@ describe("producciones", () => {
       unidades: 2,
     });
 
-    // 100 g × 2 unidades × 1.10 de merma = 220 g; costo 220 × 2 = 440
-    expect(stockOf("ins-1")).toBeCloseTo(780);
-    expect(result.costoTotalProduccion).toBeCloseTo(440);
+    // 200 g útiles / 90 % de rendimiento = 222.2222 g brutos.
+    expect(stockOf("ins-1")).toBeCloseTo(777.7778, 4);
+    expect(result.costoTotalProduccion).toBeCloseTo(444.4444, 4);
     expect(store.producciones[0]).toMatchObject({ estado: "ACTIVA", recetaNombre: "Hamburguesa" });
-    expect(store.producciones[0]?.costoTotalProduccion).toBeCloseTo(440);
+    expect(store.producciones[0]?.costoTotalProduccion).toBeCloseTo(444.4444, 4);
     expect(store.movimientos).toHaveLength(1);
     expect(store.movimientos[0]).toMatchObject({ tipo: "SALIDA", produccionId: result.produccionId });
-    expect(store.movimientos[0]?.cantidad).toBeCloseTo(220);
+    expect(store.movimientos[0]?.cantidad).toBeCloseTo(222.2222, 4);
   });
 
   it("registrar: rechaza receta sin ingredientes", async () => {
@@ -292,7 +395,7 @@ describe("producciones", () => {
       registrarProduccionReceta({ ownerId: OWNER, recetaId: "rec-1", unidades: 1 }),
     ).rejects.toMatchObject({
       faltantes: [
-        { insumoId: "ins-1", nombre: "Carne", requerido: 110, disponible: 100 },
+        { insumoId: "ins-1", nombre: "Carne", requerido: 111.1111, disponible: 100 },
       ],
     });
     expect(stockOf("ins-1")).toBe(100);
@@ -313,7 +416,7 @@ describe("producciones", () => {
     expect(stockOf("ins-1")).toBeCloseTo(1000);
     expect(store.producciones[0]?.estado).toBe("ANULADA");
     expect(store.movimientos.at(-1)).toMatchObject({ tipo: "ENTRADA", produccionId });
-    expect(store.movimientos.at(-1)?.cantidad).toBeCloseTo(220);
+    expect(store.movimientos.at(-1)?.cantidad).toBeCloseTo(222.2222, 4);
 
     await expect(anularProduccion({ ownerId: OWNER, produccionId })).rejects.toThrow(
       "ya fue anulada",
@@ -336,10 +439,10 @@ describe("producciones", () => {
       nuevasUnidades: 3,
     });
 
-    // stock: 1000 − 220 (original) + 220 (devolución) − 330 (nueva) = 670
-    expect(stockOf("ins-1")).toBeCloseTo(670);
+    // stock: 1000 - 222.2222 + 222.2222 - 333.3333 = 666.6667
+    expect(stockOf("ins-1")).toBeCloseTo(666.6667, 4);
     expect(result.produccionAnuladaId).toBe(produccionId);
-    expect(result.costoTotalProduccion).toBeCloseTo(660);
+    expect(result.costoTotalProduccion).toBeCloseTo(666.6667, 4);
     const nueva = store.producciones.find((p) => p.id === result.nuevaProduccionId);
     expect(nueva).toMatchObject({ estado: "ACTIVA", unidades: 3 });
     expect(nueva?.fechaProduccion).toEqual(fecha);

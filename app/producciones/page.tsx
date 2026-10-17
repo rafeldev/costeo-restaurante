@@ -17,6 +17,7 @@ export default function ProduccionesPage() {
     <PageContainer
       title="Producciones"
       description="Historial de producción, costos acumulados y gestión de registros."
+      showHeader
     >
       <Suspense>
         <ProduccionesContent />

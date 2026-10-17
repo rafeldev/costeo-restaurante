@@ -3,6 +3,7 @@ import { handleRouteError } from "@/lib/api-errors";
 import { requireAuthUser } from "@/lib/auth";
 import { registrarProduccionReceta } from "@/lib/inventory";
 import { parseNumberInput, producirRecetaSchema } from "@/lib/validation";
+import { parseBusinessDate } from "@/lib/business-date";
 
 export const runtime = "nodejs";
 
@@ -32,7 +33,7 @@ export async function POST(request: Request, context: RouteContext) {
       recetaId: id,
       unidades: parsed.data.unidades,
       fechaProduccion: parsed.data.fechaProduccion
-        ? new Date(parsed.data.fechaProduccion)
+        ? parseBusinessDate(parsed.data.fechaProduccion, "fecha de producción")
         : undefined,
     });
 

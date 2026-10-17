@@ -20,6 +20,24 @@ enum UnidadBase {
   UNIDAD
 }
 
+enum CategoriaInsumo {
+  PROTEINAS_CARNES
+  LACTEOS_QUESOS
+  FRUTAS_VERDURAS
+  ABARROTES_SECOS
+  EMPAQUES_DESECHABLES
+  BEBIDAS_LICORES
+}
+
+enum CategoriaReceta {
+  HAMBURGUESAS
+  ENTRADAS_TAPAS
+  PLATOS_FUERTES
+  PASTAS_PIZZAS
+  COCTELERIA_BARRA
+  POSTRES
+}
+
 enum TipoMovimientoInventario {
   ENTRADA
   SALIDA
@@ -31,44 +49,97 @@ enum EstadoProduccion {
   ANULADA
 }
 
+enum TipoDocumentoCompra {
+  FAC
+  REM
+}
+
+enum EstadoFactura {
+  BORRADOR
+  APLICADA
+}
+
+enum CondicionPago {
+  CONTADO
+  CREDITO_15
+  CREDITO_30
+}
+
+enum EstadoToma {
+  EN_CURSO
+  CERRADA
+}
+
+enum MotivoVarianza {
+  SOBREPORCIONADO
+  MERMA_EXTRA
+  VENTA_NO_REGISTRADA
+  DETERIORO
+  ERROR_CONTEO
+  OTRO
+}
+
+enum RegimenTributario {
+  IMPOCONSUMO_8
+  IVA_19
+  EXENTO
+}
+
 model Insumo {
   id                   String                 @id @default(cuid())
   ownerId              String
+  codigo               String
+  sku                  String?
   nombre               String
-  categoria            String
+  categoria            CategoriaInsumo
   unidadBase           UnidadBase
   costoUnidad          Decimal                @db.Decimal(12, 4)
   mermaPct             Decimal                @default(0) @db.Decimal(5, 2)
+  presentacionCantidad Decimal?               @db.Decimal(12, 4)
+  presentacionUnidad   UnidadBase?
+  precioPresentacion   Decimal?               @db.Decimal(12, 2)
+  activo               Boolean                @default(true)
   proveedorPreferidoId String?
+  areaId               String?
   createdAt            DateTime               @default(now())
   updatedAt            DateTime               @updatedAt
   owner                User                   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   proveedorPreferido   Proveedor?             @relation(fields: [proveedorPreferidoId], references: [id], onDelete: SetNull)
+  area                 AreaAlmacen?           @relation(fields: [areaId], references: [id], onDelete: SetNull)
   recetaInsumos        RecetaInsumo[]
   compras              CompraInsumo[]
+  lineasFactura        FacturaCompraLinea[]
   movimientos          MovimientoInventario[]
   inventario           InventarioInsumo?
+  conteosInventario    ConteoInsumo[]
 
   @@unique([ownerId, nombre])
+  @@unique([ownerId, codigo])
+  @@unique([ownerId, sku])
   @@index([ownerId])
   @@index([proveedorPreferidoId])
+  @@index([areaId])
 }
 
 model Receta {
-  id                   String         @id @default(cuid())
+  id                   String          @id @default(cuid())
   ownerId              String
+  codigo               String
   nombre               String
-  tipoProducto         String
+  categoria            CategoriaReceta
   rendimientoPorciones Int
   tiempoPreparacionMin Int?
-  precioVentaActual    Decimal?       @db.Decimal(12, 2)
-  createdAt            DateTime       @default(now())
-  updatedAt            DateTime       @updatedAt
-  owner                User           @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  precioVentaActual    Decimal?        @db.Decimal(12, 2)
+  borrador             Boolean         @default(false)
+  activa               Boolean         @default(true)
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
+  owner                User            @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   ingredientes         RecetaInsumo[]
   producciones         Produccion[]
 
-  @@index([ownerId])
+  @@unique([ownerId, codigo])
+  @@index([ownerId, categoria, activa])
 }
 
 model Produccion {
@@ -104,29 +175,55 @@ model RecetaInsumo {
 }
 
 model ConfiguracionCosteo {
-  id                String   @id @default(cuid())
-  ownerId           String   @unique
-  overheadPct       Decimal  @default(10) @db.Decimal(5, 2)
-  margenObjetivoPct Decimal  @default(35) @db.Decimal(5, 2)
-  impuestoPct       Decimal  @default(0) @db.Decimal(5, 2)
-  redondeoPrecio    Decimal  @default(100) @db.Decimal(8, 2)
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-  owner             User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  id                      String            @id @default(cuid())
+  ownerId                 String            @unique
+  overheadPct             Decimal           @default(12) @db.Decimal(5, 2)
+  margenObjetivoPct       Decimal           @default(56.2) @db.Decimal(5, 2)
+  regimenTributario       RegimenTributario @default(IMPOCONSUMO_8)
+  impuestoPct             Decimal           @default(8) @db.Decimal(5, 2)
+  redondeoPrecio          Decimal           @default(100) @db.Decimal(8, 2)
+  foodCostCriticoPct      Decimal           @default(35) @db.Decimal(5, 2)
+  margenMinimoPct         Decimal           @default(40) @db.Decimal(5, 2)
+  alertaVolatilidadActiva Boolean           @default(true)
+  umbralVolatilidadPct    Decimal           @default(15) @db.Decimal(5, 2)
+  toleranciaInventarioPct Decimal           @default(2) @db.Decimal(5, 2)
+  criticoInventarioPct    Decimal           @default(5) @db.Decimal(5, 2)
+  createdAt               DateTime          @default(now())
+  updatedAt               DateTime          @updatedAt
+  owner                   User              @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+}
+
+model ConfiguracionCosteoAuditoria {
+  id            String   @id @default(cuid())
+  ownerId       String
+  campo         String
+  valorAnterior String
+  valorNuevo    String
+  usuarioId     String
+  creadoEn      DateTime @default(now())
+  owner         User     @relation("ConfiguracionAuditoriaOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  usuario       User     @relation("ConfiguracionAuditoriaUsuario", fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([ownerId, creadoEn])
+  @@index([usuarioId])
 }
 
 model Proveedor {
-  id                String         @id @default(cuid())
+  id                String          @id @default(cuid())
   ownerId           String
+  codigo            String
   nombre            String
   contacto          String?
-  createdAt         DateTime       @default(now())
-  updatedAt         DateTime       @updatedAt
-  owner             User           @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  activo            Boolean         @default(true)
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  owner             User            @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   compras           CompraInsumo[]
+  facturas          FacturaCompra[]
   insumosPreferidos Insumo[]
 
   @@unique([ownerId, nombre])
+  @@unique([ownerId, codigo])
   @@index([ownerId])
 }
 
@@ -144,9 +241,57 @@ model CompraInsumo {
   insumo                 Insumo                 @relation(fields: [insumoId], references: [id], onDelete: Cascade)
   proveedor              Proveedor?             @relation(fields: [proveedorId], references: [id], onDelete: SetNull)
   movimientos            MovimientoInventario[]
+  lineaFactura           FacturaCompraLinea?
 
   @@index([insumoId, fechaCompra])
   @@index([proveedorId, fechaCompra])
+}
+
+model FacturaCompra {
+  id               String               @id @default(cuid())
+  ownerId          String
+  proveedorId      String
+  tipo             TipoDocumentoCompra
+  numero           String
+  fechaEmision     DateTime
+  condicionPago    CondicionPago
+  fechaVencimiento DateTime?
+  estado           EstadoFactura        @default(BORRADOR)
+  actualizaCostos  Boolean              @default(true)
+  subtotal         Decimal              @db.Decimal(14, 4)
+  impuestos        Decimal              @db.Decimal(14, 4)
+  total            Decimal              @db.Decimal(14, 4)
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  owner            User                 @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  proveedor        Proveedor            @relation(fields: [proveedorId], references: [id], onDelete: Restrict)
+  lineas           FacturaCompraLinea[]
+
+  @@unique([ownerId, tipo, numero])
+  @@index([ownerId, fechaEmision])
+  @@index([proveedorId])
+}
+
+model FacturaCompraLinea {
+  id                  String        @id @default(cuid())
+  ownerId             String
+  facturaId           String
+  insumoId            String
+  cantidad            Decimal       @db.Decimal(14, 4)
+  unidad              UnidadBase
+  precioUnitarioBruto Decimal       @db.Decimal(14, 4)
+  tasaImpuestoPct     Decimal       @db.Decimal(5, 2)
+  totalLinea          Decimal       @db.Decimal(14, 4)
+  compraInsumoId      String?       @unique
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+  owner               User          @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  factura             FacturaCompra @relation(fields: [facturaId], references: [id], onDelete: Cascade)
+  insumo              Insumo        @relation(fields: [insumoId], references: [id], onDelete: Restrict)
+  compraInsumo        CompraInsumo? @relation(fields: [compraInsumoId], references: [id], onDelete: SetNull)
+
+  @@index([ownerId, insumoId])
+  @@index([facturaId])
 }
 
 model InventarioInsumo {
@@ -178,14 +323,87 @@ model MovimientoInventario {
 }
 
 model User {
-  id                    String                @id @default(cuid())
-  email                 String                @unique
+  id                    String                         @id @default(cuid())
+  email                 String                         @unique
   passwordHash          String
-  createdAt             DateTime              @default(now())
-  updatedAt             DateTime              @updatedAt
+  restaurantName        String                         @default("Mi restaurante")
+  onboardingVersion     Int                            @default(0)
+  onboardingCompletedAt DateTime?
+  onboardingSkippedAt   DateTime?
+  createdAt             DateTime                       @default(now())
+  updatedAt             DateTime                       @updatedAt
   insumos               Insumo[]
   recetas               Receta[]
   producciones          Produccion[]
   configuracionesCosteo ConfiguracionCosteo[]
   proveedores           Proveedor[]
+  snapshotsCosteo       SnapshotCosteoMensual[]
+  facturasCompra        FacturaCompra[]
+  lineasFacturaCompra   FacturaCompraLinea[]
+  areasAlmacen          AreaAlmacen[]
+  tomasInventario       TomaInventario[]
+  auditoriasCosteo      ConfiguracionCosteoAuditoria[] @relation("ConfiguracionAuditoriaOwner")
+  cambiosCosteo         ConfiguracionCosteoAuditoria[] @relation("ConfiguracionAuditoriaUsuario")
+}
+
+model AreaAlmacen {
+  id      String   @id @default(cuid())
+  ownerId String
+  nombre  String
+  orden   Int      @default(0)
+  owner   User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  insumos Insumo[]
+
+  @@unique([ownerId, nombre])
+  @@index([ownerId, orden])
+}
+
+model TomaInventario {
+  id            String         @id @default(cuid())
+  ownerId       String
+  periodo       String
+  estado        EstadoToma     @default(EN_CURSO)
+  observaciones String?
+  firmadoPor    String?
+  abiertaEn     DateTime       @default(now())
+  cerradaEn     DateTime?
+  owner         User           @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  conteos       ConteoInsumo[]
+
+  @@unique([ownerId, periodo])
+  @@index([ownerId, estado, abiertaEn])
+}
+
+model ConteoInsumo {
+  id            String          @id @default(cuid())
+  tomaId        String
+  insumoId      String
+  stockTeorico  Decimal         @db.Decimal(14, 4)
+  costoUnitario Decimal         @db.Decimal(14, 4)
+  stockFisico   Decimal?        @db.Decimal(14, 4)
+  contadoPor    String?
+  contadoEn     DateTime?
+  motivo        MotivoVarianza?
+  nota          String?
+  toma          TomaInventario  @relation(fields: [tomaId], references: [id], onDelete: Cascade)
+  insumo        Insumo          @relation(fields: [insumoId], references: [id], onDelete: Restrict)
+
+  @@unique([tomaId, insumoId])
+  @@index([tomaId])
+  @@index([insumoId])
+}
+
+model SnapshotCosteoMensual {
+  id             String   @id @default(cuid())
+  ownerId        String
+  periodo        String
+  foodCostPct    Decimal  @db.Decimal(5, 2)
+  margenPct      Decimal  @db.Decimal(5, 2)
+  recetasActivas Int
+  recetasRiesgo  Int
+  creadoEn       DateTime @default(now())
+  owner          User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@unique([ownerId, periodo])
+  @@index([ownerId, creadoEn])
 }

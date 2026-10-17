@@ -48,3 +48,24 @@ export function calculateUnitCostFromPurchase(params: {
 
   return params.precioCompra / converted;
 }
+
+export function applyWasteYield(quantity: number, wastePct: number): number {
+  if (!Number.isFinite(quantity) || quantity < 0) {
+    throw new RangeError("La cantidad debe ser un número no negativo");
+  }
+  if (!Number.isFinite(wastePct) || wastePct < 0 || wastePct >= 100) {
+    throw new RangeError("La merma debe estar entre 0 y menos de 100%");
+  }
+  return quantity / (1 - wastePct / 100);
+}
+
+export function calculateWasteCost(cost: number, wastePct: number): number {
+  return applyWasteYield(cost, wastePct);
+}
+
+export function calculateYieldPct(wastePct: number): number {
+  if (!Number.isFinite(wastePct) || wastePct < 0 || wastePct >= 100) {
+    throw new RangeError("La merma debe estar entre 0 y menos de 100%");
+  }
+  return 100 - wastePct;
+}

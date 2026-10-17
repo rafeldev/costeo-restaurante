@@ -4,8 +4,8 @@ import { ConfiguracionModule } from "@/components/configuracion/ConfiguracionMod
 export default function ConfiguracionPage() {
   return (
     <PageContainer
-      title="Configuración de costeo"
-      description="Define los parámetros globales para calcular precio sugerido."
+      title="Parámetros Globales de Costeo"
+      description="Calibra rentabilidad, impuestos, alertas y políticas de precio desde un solo lugar."
     >
       <ConfiguracionModule />
     </PageContainer>

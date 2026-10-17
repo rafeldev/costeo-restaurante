@@ -2,6 +2,7 @@
 
 import { SessionProvider } from "next-auth/react";
 import { Toaster } from "sonner";
+import { OnboardingTourProvider } from "@/components/onboarding/OnboardingTourProvider";
 
 type ProvidersProps = {
   children: React.ReactNode;
@@ -10,16 +11,18 @@ type ProvidersProps = {
 export function Providers({ children }: ProvidersProps) {
   return (
     <SessionProvider>
-      {children}
-      <Toaster
-        position="top-right"
-        richColors
-        closeButton
-        toastOptions={{
-          className: "text-sm",
-          duration: 3600,
-        }}
-      />
+      <OnboardingTourProvider>
+        {children}
+        <Toaster
+          position="top-right"
+          richColors
+          closeButton
+          toastOptions={{
+            className: "text-sm",
+            duration: 3600,
+          }}
+        />
+      </OnboardingTourProvider>
     </SessionProvider>
   );
 }

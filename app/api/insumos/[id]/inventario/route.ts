@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
-import { UnauthorizedError, requireAuthUser, unauthorizedResponse } from "@/lib/auth";
+import { requireAuthUser } from "@/lib/auth";
+import { handleRouteError } from "@/lib/api-errors";
+import { NotFoundError } from "@/lib/errors";
 import { db } from "@/lib/db";
 import { getEstadoReposicion } from "@/lib/inventory-rules";
 import { decimalToNumber } from "@/lib/serializers";
@@ -43,19 +45,11 @@ export async function GET(_request: Request, context: RouteContext) {
       where: { id, ownerId: user.id },
       select: { id: true },
     });
-    if (!insumo) {
-      return NextResponse.json({ message: "Insumo no encontrado" }, { status: 404 });
-    }
+    if (!insumo) throw new NotFoundError("Insumo no encontrado");
     const inventario = await ensureInventario(id);
     return NextResponse.json(serializeInventario(inventario));
   } catch (error) {
-    if (error instanceof UnauthorizedError) {
-      return unauthorizedResponse();
-    }
-    return NextResponse.json(
-      { message: "No se pudo consultar inventario." },
-      { status: 500 },
-    );
+    return handleRouteError(error);
   }
 }
 
@@ -67,12 +61,11 @@ export async function PATCH(request: Request, context: RouteContext) {
       where: { id, ownerId: user.id },
       select: { id: true },
     });
-    if (!insumo) {
-      return NextResponse.json({ message: "Insumo no encontrado" }, { status: 404 });
-    }
+    if (!insumo) throw new NotFoundError("Insumo no encontrado");
     const body = await request.json();
     const parsed = inventarioPatchSchema.safeParse({
       stockMinimo: parseNumberInput(body.stockMinimo),
+      areaId: body.areaId === "" ? null : body.areaId,
     });
 
     if (!parsed.success) {
@@ -82,20 +75,24 @@ export async function PATCH(request: Request, context: RouteContext) {
       );
     }
 
-    const inventario = await db.inventarioInsumo.upsert({
-      where: { insumoId: id },
-      create: { insumoId: id, stockActual: 0, stockMinimo: parsed.data.stockMinimo },
-      update: { stockMinimo: parsed.data.stockMinimo },
+    if (parsed.data.areaId) {
+      const area = await db.areaAlmacen.findFirst({
+        where: { id: parsed.data.areaId, ownerId: user.id },
+        select: { id: true },
+      });
+      if (!area) throw new NotFoundError("Área no encontrada");
+    }
+    const inventario = await db.$transaction(async (tx) => {
+      await tx.insumo.update({ where: { id }, data: { areaId: parsed.data.areaId } });
+      return tx.inventarioInsumo.upsert({
+        where: { insumoId: id },
+        create: { insumoId: id, stockActual: 0, stockMinimo: parsed.data.stockMinimo },
+        update: { stockMinimo: parsed.data.stockMinimo },
+      });
     });
 
     return NextResponse.json(serializeInventario(inventario));
   } catch (error) {
-    if (error instanceof UnauthorizedError) {
-      return unauthorizedResponse();
-    }
-    return NextResponse.json(
-      { message: "No se pudo actualizar inventario." },
-      { status: 500 },
-    );
+    return handleRouteError(error);
   }
 }

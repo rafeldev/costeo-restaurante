@@ -1,143 +1,60 @@
 import { NextResponse } from "next/server";
-import { UnauthorizedError, requireAuthUser, unauthorizedResponse } from "@/lib/auth";
-import { db } from "@/lib/db";
-import { hasPrismaErrorCode } from "@/lib/prisma-errors";
-import { decimalToNumber } from "@/lib/serializers";
-import { parseNumberInput, recetaSchema } from "@/lib/validation";
+import { handleRouteError } from "@/lib/api-errors";
+import { requireAuthUser } from "@/lib/auth";
+import { normalizePagination } from "@/lib/pagination";
+import { createReceta, getRecetasCatalogo, serializeReceta } from "@/lib/receta-service";
+import { parseNumberInput, recetasQuerySchema, recetaSchema } from "@/lib/validation";
 
 export const runtime = "nodejs";
 
-function serializeReceta(receta: {
-  id: string;
-  nombre: string;
-  tipoProducto: string;
-  rendimientoPorciones: number;
-  tiempoPreparacionMin: number | null;
-  precioVentaActual: { toNumber: () => number } | null;
-  createdAt: Date;
-  updatedAt: Date;
-  ingredientes?: Array<{
-    id: string;
-    recetaId: string;
-    insumoId: string;
-    cantidad: { toNumber: () => number };
-    insumo?: {
-      id: string;
-      nombre: string;
-      categoria: string;
-    };
-  }>;
-}) {
+function normalizeBody(body: Record<string, unknown>) {
   return {
-    ...receta,
-    precioVentaActual: decimalToNumber(receta.precioVentaActual),
-    ingredientes: receta.ingredientes?.map((item) => ({
-      ...item,
-      cantidad: decimalToNumber(item.cantidad),
-    })),
+    ...body,
+    rendimientoPorciones: parseNumberInput(body.rendimientoPorciones),
+    tiempoPreparacionMin: parseNumberInput(body.tiempoPreparacionMin),
+    precioVentaActual: parseNumberInput(body.precioVentaActual),
+    ingredientes: Array.isArray(body.ingredientes)
+      ? body.ingredientes.map((item: { insumoId?: unknown; cantidad?: unknown }) => ({
+          insumoId: item.insumoId,
+          cantidad: parseNumberInput(item.cantidad),
+        }))
+      : [],
   };
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const user = await requireAuthUser();
-    const recetas = await db.receta.findMany({
-      where: { ownerId: user.id },
-      include: {
-        ingredientes: {
-          include: { insumo: true },
-        },
-      },
-      orderBy: { createdAt: "desc" },
+    const url = new URL(request.url);
+    const pagination = normalizePagination(url.searchParams, { defaultPageSize: 8 });
+    const filters = recetasQuerySchema.safeParse({
+      categoria: url.searchParams.get("categoria") || undefined,
+      estado: url.searchParams.get("estado") || undefined,
+      insumoId: url.searchParams.get("insumoId") || undefined,
     });
-
-    return NextResponse.json(recetas.map(serializeReceta));
-  } catch (error) {
-    if (error instanceof UnauthorizedError) {
-      return unauthorizedResponse();
+    if (!filters.success) {
+      return NextResponse.json({ message: "Filtros inválidos." }, { status: 400 });
     }
-    return NextResponse.json(
-      { message: "No se pudo consultar las recetas." },
-      { status: 500 },
-    );
+    return NextResponse.json(await getRecetasCatalogo(user.id, pagination, filters.data));
+  } catch (error) {
+    return handleRouteError(error);
   }
 }
 
 export async function POST(request: Request) {
   try {
     const user = await requireAuthUser();
-    const body = await request.json();
-    const parsed = recetaSchema.safeParse({
-      ...body,
-      rendimientoPorciones: parseNumberInput(body.rendimientoPorciones),
-      tiempoPreparacionMin: parseNumberInput(body.tiempoPreparacionMin),
-      precioVentaActual: parseNumberInput(body.precioVentaActual),
-      ingredientes: Array.isArray(body.ingredientes)
-        ? body.ingredientes.map((item: { insumoId: string; cantidad: unknown }) => ({
-            ...item,
-            cantidad: parseNumberInput(item.cantidad),
-          }))
-        : [],
-    });
-
+    const body = (await request.json()) as Record<string, unknown>;
+    const parsed = recetaSchema.safeParse(normalizeBody(body));
     if (!parsed.success) {
       return NextResponse.json(
-        { message: "Datos inválidos", issues: parsed.error.flatten() },
+        { message: "Datos inválidos.", issues: parsed.error.flatten() },
         { status: 400 },
       );
     }
-
-    const insumoIds = [...new Set(parsed.data.ingredientes.map((item) => item.insumoId))];
-    const ownedInsumos = await db.insumo.count({
-      where: {
-        ownerId: user.id,
-        id: { in: insumoIds },
-      },
-    });
-    if (ownedInsumos !== insumoIds.length) {
-      return NextResponse.json(
-        { message: "Uno o más insumos no pertenecen al usuario autenticado." },
-        { status: 403 },
-      );
-    }
-
-    const created = await db.receta.create({
-      data: {
-        ownerId: user.id,
-        nombre: parsed.data.nombre,
-        tipoProducto: parsed.data.tipoProducto,
-        rendimientoPorciones: parsed.data.rendimientoPorciones,
-        tiempoPreparacionMin: parsed.data.tiempoPreparacionMin ?? null,
-        precioVentaActual: parsed.data.precioVentaActual ?? null,
-        ingredientes: {
-          create: parsed.data.ingredientes.map((item) => ({
-            insumoId: item.insumoId,
-            cantidad: item.cantidad,
-          })),
-        },
-      },
-      include: {
-        ingredientes: {
-          include: { insumo: true },
-        },
-      },
-    });
-
+    const created = await createReceta(user.id, parsed.data);
     return NextResponse.json(serializeReceta(created), { status: 201 });
   } catch (error) {
-    if (error instanceof UnauthorizedError) {
-      return unauthorizedResponse();
-    }
-    if (hasPrismaErrorCode(error, "P2003")) {
-      return NextResponse.json(
-        { message: "Uno o más insumos no existen." },
-        { status: 400 },
-      );
-    }
-
-    return NextResponse.json(
-      { message: "No se pudo crear la receta." },
-      { status: 500 },
-    );
+    return handleRouteError(error);
   }
 }

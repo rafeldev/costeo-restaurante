@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { registrarMovimientoInventario } from "@/lib/inventory";
 import { decimalToNumber } from "@/lib/serializers";
 import { movimientoInventarioSchema, parseNumberInput } from "@/lib/validation";
+import { parseBusinessDate } from "@/lib/business-date";
 
 export const runtime = "nodejs";
 
@@ -82,7 +83,7 @@ export async function POST(request: Request) {
       cantidad: parsed.data.cantidad,
       motivo: parsed.data.motivo || undefined,
       fechaMovimiento: parsed.data.fechaMovimiento
-        ? new Date(parsed.data.fechaMovimiento)
+        ? parseBusinessDate(parsed.data.fechaMovimiento, "fecha de movimiento")
         : undefined,
     });
 

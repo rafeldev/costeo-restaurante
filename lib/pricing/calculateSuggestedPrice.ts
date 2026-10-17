@@ -23,19 +23,33 @@ function roundToStep(value: number, step: number): number {
 }
 
 export function calculateSuggestedPrice(input: PricingInput): PricingOutput {
+  if (input.rendimientoPorciones <= 0) {
+    throw new RangeError("El rendimiento debe ser mayor que cero");
+  }
+
+  const denominator = 1 - input.overheadPct / 100 - input.margenObjetivoPct / 100;
+  if (denominator <= 0) {
+    throw new RangeError("La suma de overhead y margen debe ser menor que 100%");
+  }
+
   const costoTotal = input.costoMateriaPrima * (1 + input.overheadPct / 100);
-  const costoPorPorcion = costoTotal / input.rendimientoPorciones;
+  const costoPorPorcion = input.costoMateriaPrima / input.rendimientoPorciones;
   const precioSugeridoSinImpuesto =
-    costoPorPorcion * (1 + input.margenObjetivoPct / 100);
+    costoPorPorcion / denominator;
   const precioSugeridoFinal = roundToStep(
     precioSugeridoSinImpuesto * (1 + input.impuestoPct / 100),
     input.redondeoPrecio,
   );
 
   const precioActual = input.precioVentaActual ?? null;
-  const margenRealPct =
+  const precioActualSinImpuesto =
     precioActual && precioActual > 0
-      ? ((precioActual - costoPorPorcion) / precioActual) * 100
+      ? precioActual / (1 + input.impuestoPct / 100)
+      : null;
+  const margenRealPct =
+    precioActualSinImpuesto
+      ? ((precioActualSinImpuesto - costoPorPorcion) / precioActualSinImpuesto) * 100 -
+        input.overheadPct
       : null;
 
   let semaforoRentabilidad: PricingOutput["semaforoRentabilidad"] = "sin_precio";

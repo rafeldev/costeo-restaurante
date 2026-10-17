@@ -4,6 +4,19 @@ export class ValidationError extends DomainError {}
 
 export class NotFoundError extends DomainError {}
 
+export class ConflictError extends DomainError {}
+
+export class InventoryCountOpenError extends ConflictError {
+  readonly code = "INVENTORY_COUNT_OPEN";
+
+  constructor(
+    public readonly tomaId: string,
+    public readonly periodo: string,
+  ) {
+    super("No se puede modificar el inventario mientras existe una toma abierta");
+  }
+}
+
 export type StockShortage = {
   insumoId: string;
   nombre: string;

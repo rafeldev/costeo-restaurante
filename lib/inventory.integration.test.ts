@@ -16,8 +16,9 @@ describe("inventario concurrente", () => {
       const insumo = await db.insumo.create({
         data: {
           ownerId: owner.id,
+          codigo: "INS-001",
           nombre: `Insumo ${suffix}`,
-          categoria: "Test",
+          categoria: "ABARROTES_SECOS",
           unidadBase: "GRAMO",
           costoUnidad: 1,
         },
@@ -25,8 +26,9 @@ describe("inventario concurrente", () => {
       const receta = await db.receta.create({
         data: {
           ownerId: owner.id,
+          codigo: "RC-001",
           nombre: `Receta ${suffix}`,
-          tipoProducto: "Test",
+          categoria: "PLATOS_FUERTES",
           rendimientoPorciones: 1,
           ingredientes: {
             create: { insumoId: insumo.id, cantidad: 10 },
@@ -70,8 +72,9 @@ describe("inventario concurrente", () => {
       const insumo = await db.insumo.create({
         data: {
           ownerId: owner.id,
+          codigo: "INS-001",
           nombre: `Insumo ${suffix}`,
-          categoria: "Test",
+          categoria: "ABARROTES_SECOS",
           unidadBase: "GRAMO",
           costoUnidad: 1,
         },
@@ -79,8 +82,9 @@ describe("inventario concurrente", () => {
       const receta = await db.receta.create({
         data: {
           ownerId: owner.id,
+          codigo: "RC-001",
           nombre: `Receta ${suffix}`,
-          tipoProducto: "Test",
+          categoria: "PLATOS_FUERTES",
           rendimientoPorciones: 1,
           ingredientes: {
             create: { insumoId: insumo.id, cantidad: 10 },

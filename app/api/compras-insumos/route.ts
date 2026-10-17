@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { registrarCompraInsumo } from "@/lib/inventory";
 import { decimalToNumber } from "@/lib/serializers";
 import { compraInsumoSchema, parseNumberInput } from "@/lib/validation";
+import { parseBusinessDate } from "@/lib/business-date";
 
 export const runtime = "nodejs";
 
@@ -82,7 +83,7 @@ export async function POST(request: Request) {
       ownerId: user.id,
       insumoId: parsed.data.insumoId,
       proveedorId: parsed.data.proveedorId ?? null,
-      fechaCompra: parsed.data.fechaCompra ? new Date(parsed.data.fechaCompra) : undefined,
+      fechaCompra: parsed.data.fechaCompra ? parseBusinessDate(parsed.data.fechaCompra, "fecha de compra") : undefined,
       cantidadCompra: parsed.data.cantidadCompra,
       unidadCompra: parsed.data.unidadCompra,
       precioTotal: parsed.data.precioTotal,

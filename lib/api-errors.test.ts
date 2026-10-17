@@ -2,12 +2,19 @@ import { describe, expect, it } from "vitest";
 import { handleRouteError } from "@/lib/api-errors";
 import { UnauthorizedError } from "@/lib/auth";
 import {
+  InventoryCountOpenError,
   InsufficientStockError,
   NotFoundError,
   ValidationError,
 } from "@/lib/errors";
 
 describe("handleRouteError", () => {
+  it("convierte JSON mal formado en 400", async () => {
+    const response = handleRouteError(new SyntaxError("Unexpected token"));
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({ message: "El cuerpo JSON no es válido" });
+  });
+
   it.each([
     [new UnauthorizedError(), 401, "No autenticado"],
     [new NotFoundError("Receta no encontrada"), 404, "Receta no encontrada"],
@@ -29,6 +36,18 @@ describe("handleRouteError", () => {
     await expect(response.json()).resolves.toEqual({
       message: "Stock insuficiente para registrar la producción",
       faltantes,
+    });
+  });
+
+  it("devuelve 409 con la toma abierta que bloquea el inventario", async () => {
+    const response = handleRouteError(new InventoryCountOpenError("toma-1", "2026-10"));
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toEqual({
+      code: "INVENTORY_COUNT_OPEN",
+      message: "No se puede modificar el inventario mientras existe una toma abierta",
+      tomaId: "toma-1",
+      periodo: "2026-10",
     });
   });
 

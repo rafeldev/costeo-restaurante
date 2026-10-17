@@ -1,126 +1,66 @@
-import { UnidadBase } from "@prisma/client";
 import { NextResponse } from "next/server";
-import { UnauthorizedError, requireAuthUser, unauthorizedResponse } from "@/lib/auth";
+import { handleRouteError } from "@/lib/api-errors";
+import { requireAuthUser } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { hasPrismaErrorCode } from "@/lib/prisma-errors";
-import { decimalToNumber } from "@/lib/serializers";
-import { insumoSchema, parseNumberInput } from "@/lib/validation";
+import { updateInsumo } from "@/lib/insumo-service";
+import { serializeInsumo } from "@/lib/insumos";
+import { insumoPatchSchema, parseNumberInput } from "@/lib/validation";
 
 export const runtime = "nodejs";
 
-type RouteContext = {
-  params: Promise<{ id: string }>;
-};
+type RouteContext = { params: Promise<{ id: string }> };
 
 export async function PATCH(request: Request, context: RouteContext) {
-  const { id } = await context.params;
-
   try {
     const user = await requireAuthUser();
-    const body = await request.json();
-    const parsed = insumoSchema.partial().safeParse({
+    const { id } = await context.params;
+    const body = (await request.json()) as Record<string, unknown>;
+    const parsed = insumoPatchSchema.safeParse({
       ...body,
-      costoUnidad: parseNumberInput(body.costoUnidad),
-      mermaPct: parseNumberInput(body.mermaPct),
+      costoUnidad:
+        body.costoUnidad === undefined
+          ? undefined
+          : parseNumberInput(body.costoUnidad) ?? body.costoUnidad,
+      mermaPct:
+        body.mermaPct === undefined
+          ? undefined
+          : parseNumberInput(body.mermaPct) ?? body.mermaPct,
+      presentacionCantidad:
+        body.presentacionCantidad === undefined
+          ? undefined
+          : body.presentacionCantidad === null || body.presentacionCantidad === ""
+            ? null
+            : parseNumberInput(body.presentacionCantidad) ?? body.presentacionCantidad,
+      precioPresentacion:
+        body.precioPresentacion === undefined
+          ? undefined
+          : body.precioPresentacion === null || body.precioPresentacion === ""
+            ? null
+            : parseNumberInput(body.precioPresentacion) ?? body.precioPresentacion,
     });
-
     if (!parsed.success) {
       return NextResponse.json(
-        { message: "Datos inválidos", issues: parsed.error.flatten() },
+        { message: "Datos inválidos.", issues: parsed.error.flatten() },
         { status: 400 },
       );
     }
-
-    const existing = await db.insumo.findFirst({
-      where: { id, ownerId: user.id },
-      select: { id: true },
-    });
-    if (!existing) {
-      return NextResponse.json({ message: "Insumo no encontrado" }, { status: 404 });
-    }
-
-    if (parsed.data.proveedorPreferidoId) {
-      const proveedor = await db.proveedor.findFirst({
-        where: { id: parsed.data.proveedorPreferidoId, ownerId: user.id },
-        select: { id: true },
-      });
-      if (!proveedor) {
-        return NextResponse.json({ message: "Proveedor no encontrado" }, { status: 400 });
-      }
-    }
-
-    const updated = await db.insumo.update({
-      where: { id },
-      data: {
-        nombre: parsed.data.nombre,
-        categoria: parsed.data.categoria,
-        unidadBase: parsed.data.unidadBase as UnidadBase | undefined,
-        costoUnidad: parsed.data.costoUnidad,
-        mermaPct: parsed.data.mermaPct,
-        proveedorPreferidoId:
-          parsed.data.proveedorPreferidoId === undefined
-            ? undefined
-            : parsed.data.proveedorPreferidoId || null,
-      },
-      include: {
-        proveedorPreferido: { select: { id: true, nombre: true } },
-        _count: { select: { recetaInsumos: true } },
-      },
-    });
-
-    return NextResponse.json({
-      ...updated,
-      costoUnidad: decimalToNumber(updated.costoUnidad),
-      mermaPct: decimalToNumber(updated.mermaPct),
-      recetasCount: updated._count.recetaInsumos,
-    });
+    const updated = await updateInsumo(user.id, id, parsed.data);
+    return NextResponse.json(serializeInsumo(updated));
   } catch (error) {
-    if (error instanceof UnauthorizedError) {
-      return unauthorizedResponse();
-    }
-    if (hasPrismaErrorCode(error, "P2025")) {
-      return NextResponse.json({ message: "Insumo no encontrado" }, { status: 404 });
-    }
-    if (hasPrismaErrorCode(error, "P2002")) {
-      return NextResponse.json(
-        { message: "Ya existe un insumo con ese nombre." },
-        { status: 409 },
-      );
-    }
-
-    return NextResponse.json(
-      { message: "No se pudo actualizar el insumo." },
-      { status: 500 },
-    );
+    return handleRouteError(error);
   }
 }
 
 export async function DELETE(_request: Request, context: RouteContext) {
-  const { id } = await context.params;
   try {
     const user = await requireAuthUser();
+    const { id } = await context.params;
     const deleted = await db.insumo.deleteMany({ where: { id, ownerId: user.id } });
     if (deleted.count === 0) {
-      return NextResponse.json({ message: "Insumo no encontrado" }, { status: 404 });
+      return NextResponse.json({ message: "Insumo no encontrado." }, { status: 404 });
     }
     return NextResponse.json({ ok: true });
   } catch (error) {
-    if (error instanceof UnauthorizedError) {
-      return unauthorizedResponse();
-    }
-    if (hasPrismaErrorCode(error, "P2025")) {
-      return NextResponse.json({ message: "Insumo no encontrado" }, { status: 404 });
-    }
-    if (hasPrismaErrorCode(error, "P2003")) {
-      return NextResponse.json(
-        { message: "No puedes eliminar un insumo usado en recetas." },
-        { status: 409 },
-      );
-    }
-
-    return NextResponse.json(
-      { message: "No se pudo eliminar el insumo." },
-      { status: 500 },
-    );
+    return handleRouteError(error);
   }
 }

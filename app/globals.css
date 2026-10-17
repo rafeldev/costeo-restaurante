@@ -1,43 +1,56 @@
 @import "tailwindcss";
 
 /* ==========================================================================
-   Design tokens — Costeo Restaurante (warm, kitchen-inspired)
+   Design tokens — CalculaChef Culinary Financial System (Stitch)
    ========================================================================== */
 
 :root {
   /* Surfaces (elevation) — same hue, subtle lightness steps */
-  --parchment: #faf8f5;
+  --parchment: #faf9f6;
   --paper: #ffffff;
   --paper-elevated: #ffffff;
 
   /* Text hierarchy */
-  --ink: #1c1917;
-  --ink-secondary: #57534e;
-  --ink-tertiary: #78716c;
-  --ink-muted: #a8a29e;
+  --ink: #0f172a;
+  --ink-secondary: #475569;
+  --ink-tertiary: #64748b;
+  --ink-muted: #94a3b8;
 
   /* Borders — low contrast, squint-friendly */
-  --border-subtle: rgba(28, 25, 23, 0.08);
-  --border: rgba(28, 25, 23, 0.12);
-  --border-strong: rgba(28, 25, 23, 0.2);
-  --border-focus: rgba(180, 83, 9, 0.5);
+  --border-subtle: #e2e8f0;
+  --border: #e2e8f0;
+  --border-strong: #cbd5e1;
+  --border-input: #cbd5e1;
+  --border-focus: rgba(194, 94, 25, 0.5);
 
-  /* Accent — warm (amber/terracota) */
-  --accent: #b45309;
-  --accent-hover: #92400e;
-  --ring: rgba(180, 83, 9, 0.25);
+  /* Accent — roasted terracotta */
+  --accent: #c25e19;
+  --accent-hover: #9a3412;
+  --ring: rgba(194, 94, 25, 0.2);
 
   /* Controls — inset, slightly darker than background */
-  --control-bg: #f5f3f0;
-  --control-border: var(--border);
+  --control-bg: #f1f5f9;
+  --control-border: var(--border-input);
   --control-focus: var(--accent);
 
   /* Semantic */
   --danger-bg: #fef2f2;
+  --danger-surface: #fef2f2;
   --danger-text: #b91c1c;
+  --danger-border: #fecaca;
   --danger-hover: #fee2e2;
   --success-text: #15803d;
-  --warning-text: #a16207;
+  --success-surface: #f0fdf4;
+  --warning-text: rgb(180 83 9);
+  --warning-surface: #fffbeb;
+  --info-text: #0369a1;
+  --info-surface: #f0f9ff;
+  --info-border: #bae6fd;
+
+  /* Elevation */
+  --shadow-card: 0 1px 3px 0 rgba(15, 23, 42, 0.04), 0 1px 2px -1px rgba(15, 23, 42, 0.02);
+  --shadow-popover: 0 4px 6px -1px rgba(15, 23, 42, 0.08), 0 2px 4px -2px rgba(15, 23, 42, 0.04);
+  --shadow-modal: 0 20px 25px -5px rgba(15, 23, 42, 0.1), 0 8px 10px -6px rgba(15, 23, 42, 0.05);
 
   /* Legacy aliases for gradual migration */
   --background: var(--parchment);
@@ -55,7 +68,7 @@
   --color-border-subtle: var(--border-subtle);
   --color-border-strong: var(--border-strong);
   --color-accent: var(--accent);
-  --font-sans: "Inter", "Segoe UI", Arial, Helvetica, sans-serif;
+  --font-sans: var(--font-inter), "Inter", "Segoe UI", Arial, Helvetica, sans-serif;
   --font-mono: Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 }
 
@@ -64,6 +77,27 @@ body {
   color: var(--ink);
   font-family: var(--font-sans);
 }
+
+html { background: var(--parchment); }
+.material-symbols-outlined {
+  font-family: "Material Symbols Outlined";
+  font-weight: normal;
+  font-style: normal;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  -webkit-font-feature-settings: "liga";
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: "liga";
+}
+.font-headline-xl { font-size: 2rem; line-height: 2.5rem; font-weight: 700; letter-spacing: -0.025em; }
+.font-headline-lg { font-size: 1.5rem; line-height: 2rem; font-weight: 600; letter-spacing: -0.02em; }
+.font-headline-md { font-size: 1.125rem; line-height: 1.75rem; font-weight: 600; letter-spacing: -0.015em; }
+.font-kpi-value { font-size: 1.875rem; line-height: 2.25rem; font-weight: 700; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
 
 /* ==========================================================================
    Typography hierarchy (use these instead of ad-hoc slate-*)
@@ -89,7 +123,7 @@ body {
 .input {
   width: 100%;
   min-height: 2.75rem;
-  border-radius: 0.625rem;
+  border-radius: 0.5rem;
   border: 1px solid var(--control-border);
   background: var(--control-bg);
   padding: 0.625rem 0.75rem;
@@ -118,10 +152,10 @@ body {
    ========================================================================== */
 
 .surface-card {
-  border-radius: 0.875rem;
+  border-radius: 0.75rem;
   border: 1px solid var(--border);
   background: var(--paper);
-  box-shadow: 0 1px 2px rgba(28, 25, 23, 0.04);
+  box-shadow: var(--shadow-card);
 }
 
 /* ==========================================================================
@@ -129,11 +163,12 @@ body {
    ========================================================================== */
 
 .btn-primary,
+.btn-accent,
 .btn-secondary,
 .btn-danger,
 .btn-ghost {
   min-height: 2.75rem;
-  border-radius: 0.625rem;
+  border-radius: 0.5rem;
   padding-inline: 0.875rem;
   font-size: 0.875rem;
   font-weight: 600;
@@ -148,7 +183,7 @@ body {
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: #292524;
+  background: #1e293b;
 }
 
 .btn-primary:focus-visible {
@@ -156,14 +191,30 @@ body {
   box-shadow: 0 0 0 3px var(--ring);
 }
 
+.btn-accent {
+  background: var(--accent);
+  color: white;
+  border: none;
+}
+
+.btn-accent:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.btn-accent:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--ring);
+}
+
 .btn-secondary {
   border: 1px solid var(--border);
-  background: var(--parchment);
+  background: var(--paper);
   color: var(--ink);
 }
 
 .btn-secondary:hover:not(:disabled) {
-  background: var(--control-bg);
+  background: #f8fafc;
+  border-color: var(--border-strong);
 }
 
 .btn-secondary:focus-visible {
@@ -172,7 +223,7 @@ body {
 }
 
 .btn-danger {
-  border: 1px solid rgba(185, 28, 28, 0.3);
+  border: 1px solid var(--danger-border);
   background: var(--danger-bg);
   color: var(--danger-text);
 }
@@ -193,7 +244,7 @@ body {
 }
 
 .btn-ghost:hover:not(:disabled) {
-  background: var(--border-subtle);
+  background: var(--control-bg);
   color: var(--ink);
 }
 
@@ -203,9 +254,40 @@ body {
 }
 
 .btn-primary:disabled,
+.btn-accent:disabled,
 .btn-secondary:disabled,
 .btn-danger:disabled,
 .btn-ghost:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+@media print {
+  body {
+    background: white;
+  }
+
+  body * {
+    visibility: hidden;
+  }
+
+  .inventory-print-root,
+  .inventory-print-root * {
+    visibility: visible;
+  }
+
+  .inventory-print-root {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+  }
+
+  .inventory-no-print {
+    display: none !important;
+  }
+
+  .inventory-print-root .surface-card {
+    break-inside: avoid;
+    box-shadow: none;
+  }
 }

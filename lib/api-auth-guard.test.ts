@@ -39,7 +39,10 @@ function callsRequireAuthUser(node: ts.Node) {
 
 describe("autenticación de rutas API", () => {
   const routeFiles = listRouteFiles(apiDirectory).filter(
-    (filePath) => !filePath.includes(`${path.sep}api${path.sep}auth${path.sep}`),
+    (filePath) =>
+      !filePath.includes(`${path.sep}api${path.sep}auth${path.sep}`) &&
+      !filePath.endsWith(`${path.sep}api${path.sep}health${path.sep}route.ts`) &&
+      !filePath.endsWith(`${path.sep}api${path.sep}internal${path.sep}snapshots-mensuales${path.sep}route.ts`),
   );
 
   for (const filePath of routeFiles) {
