@@ -103,7 +103,7 @@ export async function getMezclaMenu(ownerId: string, periodo: string) {
 
   let mayorImpacto: { recetaId: string; nombre: string; margenTotal: number } | null = null;
   for (const item of items) {
-    if (item.margenTotal === null) continue;
+    if (!item.tieneVentaRegistrada || item.margenTotal === null) continue;
     if (mayorImpacto === null || item.margenTotal > mayorImpacto.margenTotal) {
       mayorImpacto = { recetaId: item.recetaId, nombre: item.nombre, margenTotal: item.margenTotal };
     }
