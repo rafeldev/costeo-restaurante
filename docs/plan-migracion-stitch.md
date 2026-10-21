@@ -374,3 +374,53 @@ Cada migración se aplica y prueba (`npm run db:migrate`, `npm test`, `npm run t
 - Revisión visual con el navegador integrado en 1280 px y 375 px: sin scroll horizontal, controles de 44 px, contraste AA.
 - Búsqueda de hex antiguos (`#faf8f5`, `#1c1917`, `#b45309`, `#292524`) en `app/` y `components/`: sin resultados.
 - Estados vacío, error y carga presentes en cada listado.
+
+## 15. Pantalla 8 (adición post-migración): Ventas y Mezcla de Menú
+
+Añadida después del cierre de las pantallas 1–7, a partir de una pantalla nueva generada en el proyecto de Stitch (`projects/11494162470921573572/screens/1ade8c304ffa4651bec1bc0ce6f8f84a`, título "Ventas y Mezcla de Menú"). Reabre, de forma acotada, el hueco documentado en la pantalla 5 ("sin matriz BCG real, que requiere ventas y se eliminó el esquema de ventas"): registra **unidades vendidas por receta y periodo** — sin integración POS, sin ticket, sin relación con `Produccion` ni con inventario — para calcular el margen de contribución total y clasificar cada receta en la matriz de ingeniería de menú (Miller & Kasavana).
+
+**Diseño:** ruta de nav "Mezcla" (entre Recetas y Producciones); selector de periodo (mes/año); botones "Descargar Reporte" e "Importar ventas (CSV)" (ambos fuera de alcance esta iteración); 4 KPI (Unidades Vendidas del periodo, Food Cost Ponderado, Mayor Impacto Económico, Recetas sin Dato de Ventas); callout educativo "Popularidad × Rentabilidad"; filtro por categoría y orden (Margen Total / Unidades / Food Cost % / Alfabético); tabla editable (receta y código, categoría, unidades vendidas con stepper, costo por porción, PVP carta, margen unitario, margen total, food cost %, badge de cuadrante) con botón "Guardar Unidades"; fila de totales; cuatro paneles de cuadrante (Estrellas, Caballos de Batalla, Puzzles, Perros) listando las recetas de cada uno con su estrategia recomendada.
+
+**Inconsistencias del diseño (resueltas para la implementación):**
+- El mockup calcula food cost % y margen unitario sobre el PVP bruto (`costoPorcion / pvpCarta`). El resto de la app (`costRecipe` en `lib/receta-service.ts`, dashboard) calcula food cost % sobre el precio neto de impuesto. **Se usa la fórmula existente de `costRecipe`** para esta pantalla, por consistencia con Recetas y el Inicio; los números no coincidirán centavo a centavo con el mockup.
+- El mockup dibuja la matriz como una dispersión 2×2 real. El HTML generado en realidad la implementa como **cuatro tarjetas de cuadrante con listas**, no un scatter plot — se implementa tal cual el HTML (más simple, sin librería de gráficos nueva).
+- "Descargar Reporte" e "Importar ventas (CSV)" quedan **deshabilitados con tooltip "Próximamente"**, igual que "Descargar P&L" en la pantalla 1.
+
+**Tabla nueva**
+```prisma
+model VentaReceta {
+  id               String   @id @default(cuid())
+  ownerId          String
+  recetaId         String
+  periodo          String   // "2026-10"
+  unidadesVendidas Int      @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  owner            User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  receta           Receta   @relation(fields: [recetaId], references: [id], onDelete: Cascade)
+
+  @@unique([ownerId, recetaId, periodo])
+  @@index([ownerId, periodo])
+}
+```
+Una fila **ausente** para una receta en el periodo significa "sin dato" (pendiente); una fila con `unidadesVendidas = 0` significa que se registró explícitamente que no tuvo ventas. Ambas se excluyen del promedio de popularidad y del promedio de margen que fijan los umbrales de la matriz (si no hay recetas con ventas registradas, no hay umbrales ni cuadrantes).
+
+**Cálculos (en servidor, reutilizando `costRecipe`)**
+- `margenUnitario = pvpCarta - costoPorcion` (null si la receta no tiene PVP de carta).
+- `margenTotal = margenUnitario * unidadesVendidas`.
+- `foodCostPct`: el mismo campo que ya calcula `costRecipe` (neto de impuesto).
+- Food Cost Ponderado del periodo = `Σ(costoPorcion × unidades) / Σ(ventaNeta × unidades) × 100`, solo sobre recetas con PVP y con fila de ventas.
+- Umbral de popularidad = promedio simple de `unidadesVendidas` sobre recetas con fila de ventas; umbral de margen = promedio simple de `margenUnitario` sobre esas mismas recetas.
+- Cuadrante: Estrella (unidades ≥ umbral, margen ≥ umbral) · Caballo de Batalla (unidades ≥ umbral, margen < umbral) · Puzzle (unidades < umbral, margen ≥ umbral) · Perro (unidades < umbral, margen < umbral). Sin fila o sin PVP ⇒ "Sin dato".
+
+**Endpoints nuevos**
+- `GET /api/ventas-recetas?periodo=2026-10` → `{ periodo, kpis: {...}, items: [...], cuadrantes: {...}, umbrales: {...} }`. Sin paginación (mismo criterio que `/api/dashboard`: una sola carga para todas las recetas activas del owner).
+- `PATCH /api/ventas-recetas` body `{ periodo, items: [{ recetaId, unidadesVendidas }] }` (máx. 200 líneas) → upsert transaccional por fila, verificando que cada `recetaId` pertenezca al `ownerId` antes de escribir.
+
+**Cambios de UI:** nueva ruta `/mezcla`, entrada "Mezcla" en `components/MainNav.tsx` entre Recetas y Producciones; `components/mezcla/MezclaMenuModule.tsx` con selector de periodo, KPI (`KpiCard`), `EducationalCallout`, filtro de categoría + orden, tabla con stepper local (sin auto-guardado) y botón "Guardar Unidades" que dispara el `PATCH`, fila de totales, y los cuatro paneles de cuadrante. Reutiliza `Badge` (variantes nuevas para Estrella/Caballo/Puzzle/Perro/Sin dato), `EmptyState` (sin recetas activas) y `LoadingState`/`ErrorState`.
+
+**Fuera de alcance (documentado):** importar ventas por CSV, descarga de reporte, integración con POS/TPV, vínculo con `Produccion` o con stock.
+
+**Verificación:** tests de clasificación de cuadrante y de food cost ponderado con datos en memoria; test de integración del `PATCH` (transacción, scoping por `ownerId`, rechazo de `recetaId` ajeno); `lib/api-auth-guard.test.ts` cubre la ruta nueva; revisión visual de `/mezcla` con 0 ventas registradas (EmptyState) y con datos del seed.
+
+**Migración Prisma:** `venta_receta` (añadida al final del orden de la sección 13, no reordena las migraciones 1–7 ya aplicadas).
