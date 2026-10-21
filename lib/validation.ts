@@ -202,6 +202,21 @@ export const abrirTomaInventarioSchema = z.object({
   observaciones: z.string().trim().max(1000).optional().nullable(),
 });
 
+export const ventaRecetaItemSchema = z.object({
+  recetaId: z.string().min(1),
+  unidadesVendidas: z.number().int().min(0),
+});
+
+export const ventasRecetasPatchSchema = z.object({
+  periodo: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, "El periodo debe tener formato AAAA-MM"),
+  items: z.array(ventaRecetaItemSchema).min(1).max(200),
+}).superRefine((value, context) => {
+  const ids = new Set(value.items.map((item) => item.recetaId));
+  if (ids.size !== value.items.length) {
+    context.addIssue({ code: "custom", path: ["items"], message: "No repitas una receta en el mismo envío" });
+  }
+});
+
 export const conteoInsumoPatchSchema = z.object({
   conteos: z.array(z.object({
     id: z.string().min(1),
