@@ -137,9 +137,25 @@ model Receta {
   owner                User            @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   ingredientes         RecetaInsumo[]
   producciones         Produccion[]
+  ventas               VentaReceta[]
 
   @@unique([ownerId, codigo])
   @@index([ownerId, categoria, activa])
+}
+
+model VentaReceta {
+  id               String   @id @default(cuid())
+  ownerId          String
+  recetaId         String
+  periodo          String
+  unidadesVendidas Int      @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  owner            User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  receta           Receta   @relation(fields: [recetaId], references: [id], onDelete: Cascade)
+
+  @@unique([ownerId, recetaId, periodo])
+  @@index([ownerId, periodo])
 }
 
 model Produccion {
@@ -344,6 +360,7 @@ model User {
   tomasInventario       TomaInventario[]
   auditoriasCosteo      ConfiguracionCosteoAuditoria[] @relation("ConfiguracionAuditoriaOwner")
   cambiosCosteo         ConfiguracionCosteoAuditoria[] @relation("ConfiguracionAuditoriaUsuario")
+  ventasRecetas         VentaReceta[]
 }
 
 model AreaAlmacen {
