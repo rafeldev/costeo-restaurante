@@ -5,6 +5,7 @@ import type {
   RegimenTributarioValue,
   UnidadBaseValue,
 } from "@/lib/domain";
+import type { Cuadrante } from "@/lib/menu-engineering";
 
 export type InsumoDTO = {
   id: string;
@@ -344,4 +345,32 @@ export type TomaInventarioDetalleDTO = TomaInventarioResumenDTO & {
   totalFiltrado: number;
   page: number;
   pageSize: number;
+};
+
+export type MezclaMenuDTO = {
+  periodo: string;
+  kpis: {
+    unidadesVendidas: number;
+    foodCostPonderadoPct: number | null;
+    mayorImpacto: { recetaId: string; nombre: string; margenTotal: number } | null;
+    sinDato: number;
+  };
+  items: Array<{
+    recetaId: string;
+    codigo: string;
+    nombre: string;
+    categoria: CategoriaRecetaValue;
+    unidadesVendidas: number;
+    tieneVentaRegistrada: boolean;
+    costoPorcion: number;
+    pvpCarta: number | null;
+    margenUnitario: number | null;
+    margenTotal: number | null;
+    foodCostPct: number | null;
+    cuadrante: Cuadrante;
+  }>;
+  totales: {
+    unidadesVendidas: number;
+    margenTotal: number;
+  };
 };
