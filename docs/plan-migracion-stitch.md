@@ -406,7 +406,7 @@ model VentaReceta {
 Una fila **ausente** para una receta en el periodo significa "sin dato" (pendiente); una fila con `unidadesVendidas = 0` significa que se registró explícitamente que no tuvo ventas. Ambas se excluyen del promedio de popularidad y del promedio de margen que fijan los umbrales de la matriz (si no hay recetas con ventas registradas, no hay umbrales ni cuadrantes).
 
 **Cálculos (en servidor, reutilizando `costRecipe`)**
-- `margenUnitario = pvpCarta - costoPorcion` (null si la receta no tiene PVP de carta).
+- `margenUnitario = ventaNeta - costoPorcion` (neto de impuesto, no bruto — consistente con `foodCostPct` y con el resto de la app; null si la receta no tiene PVP de carta).
 - `margenTotal = margenUnitario * unidadesVendidas`.
 - `foodCostPct`: el mismo campo que ya calcula `costRecipe` (neto de impuesto).
 - Food Cost Ponderado del periodo = `Σ(costoPorcion × unidades) / Σ(ventaNeta × unidades) × 100`, solo sobre recetas con PVP y con fila de ventas.
