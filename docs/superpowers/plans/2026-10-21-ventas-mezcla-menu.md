@@ -115,7 +115,7 @@ describe("classifyCuadrante", () => {
 
   it("clasifica Perro con baja popularidad y bajo margen", () => {
     expect(
-      classifyCuadrante({ unidadesVendidas: 45, margenUnitario: 6.3, umbralUnidades: 240, umbralMargen: 6.28, tieneVentaRegistrada: true }),
+      classifyCuadrante({ unidadesVendidas: 45, margenUnitario: 3.0, umbralUnidades: 240, umbralMargen: 6.28, tieneVentaRegistrada: true }),
     ).toBe("Perro");
   });
 
