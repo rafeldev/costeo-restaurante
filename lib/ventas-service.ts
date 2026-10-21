@@ -42,11 +42,11 @@ export async function getMezclaMenu(ownerId: string, periodo: string) {
   const rows = recetas.map((receta) => {
     const costeo = costRecipe(receta, config);
     const { costoPorcion, pvpCarta, foodCostPct } = costeo;
-    const margenUnitario = pvpCarta !== null ? pvpCarta - costoPorcion : null;
+    const ventaNeta = pvpCarta && pvpCarta > 0 ? pvpCarta / (1 + impuestoPct / 100) : null;
+    const margenUnitario = ventaNeta !== null ? ventaNeta - costoPorcion : null;
     const tieneVentaRegistrada = ventasPorReceta.has(receta.id);
     const unidadesVendidas = ventasPorReceta.get(receta.id)?.unidadesVendidas ?? 0;
     const margenTotal = margenUnitario !== null ? margenUnitario * unidadesVendidas : null;
-    const ventaNeta = pvpCarta && pvpCarta > 0 ? pvpCarta / (1 + impuestoPct / 100) : null;
     return {
       recetaId: receta.id,
       codigo: receta.codigo,
@@ -103,7 +103,7 @@ export async function getMezclaMenu(ownerId: string, periodo: string) {
 
   let mayorImpacto: { recetaId: string; nombre: string; margenTotal: number } | null = null;
   for (const item of items) {
-    if (!item.tieneVentaRegistrada || item.margenTotal === null) continue;
+    if (!item.tieneVentaRegistrada || item.margenTotal === null || item.margenTotal <= 0) continue;
     if (mayorImpacto === null || item.margenTotal > mayorImpacto.margenTotal) {
       mayorImpacto = { recetaId: item.recetaId, nombre: item.nombre, margenTotal: item.margenTotal };
     }

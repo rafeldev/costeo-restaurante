@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { MezclaMenuDTO } from "@/lib/api-types";
 import { categoriaRecetaLabels, categoriaRecetaValues, type CategoriaRecetaValue } from "@/lib/domain";
 import { formatMoney, formatPercent } from "@/lib/format";
@@ -64,25 +64,33 @@ export function MezclaMenuModule() {
   const [orden, setOrden] = useState<OrdenKey>("nombre");
   const [ediciones, setEdiciones] = useState<Record<string, number>>({});
   const [saving, setSaving] = useState(false);
+  const periodoRef = useRef(periodo);
 
   async function loadData(targetPeriodo: string, signal?: AbortSignal) {
+    // El periodo puede cambiar mientras esta carga está en curso (navegación ‹/› o un guardado
+    // que termina tarde). Si ya no coincide con el periodo vigente, se descarta en silencio para
+    // no pisar los datos del periodo al que el usuario ya navegó.
+    if (targetPeriodo !== periodoRef.current) return;
     setStatus("loading");
     setError("");
     try {
       const response = await fetch(`/api/ventas-recetas?periodo=${targetPeriodo}`, { signal });
       if (!response.ok) throw new Error("No se pudo cargar la mezcla de menú.");
       const body: MezclaMenuDTO = await response.json();
+      if (targetPeriodo !== periodoRef.current) return;
       setData(body);
       setEdiciones({});
       setStatus("ready");
     } catch (loadError) {
       if ((loadError as Error).name === "AbortError") return;
+      if (targetPeriodo !== periodoRef.current) return;
       setError(loadError instanceof Error ? loadError.message : "Error inesperado");
       setStatus("error");
     }
   }
 
   useEffect(() => {
+    periodoRef.current = periodo;
     const controller = new AbortController();
     void loadData(periodo, controller.signal);
     return () => controller.abort();
@@ -92,13 +100,17 @@ export function MezclaMenuModule() {
     return Object.entries(cambios)
       .filter(([recetaId, unidades]) => {
         const item = itemsActuales.find((i) => i.recetaId === recetaId);
-        return item !== undefined && item.unidadesVendidas !== unidades;
+        // Una receta "Sin dato" (sin venta registrada) nunca debe considerarse "sin cambios" solo
+        // porque el valor tocado por el usuario coincide con el 0 implícito que ya se mostraba:
+        // guardar un "0 vendidas" explícito debe viajar al servidor igual.
+        return item !== undefined && (!item.tieneVentaRegistrada || item.unidadesVendidas !== unidades);
       })
       .map(([recetaId, unidadesVendidas]) => ({ recetaId, unidadesVendidas }));
   }
 
   async function guardarUnidades() {
     if (!data) return;
+    const periodoGuardado = periodo;
     const cambios = unidadesCambiadas(data.items, ediciones);
     if (cambios.length === 0) return;
 
@@ -107,13 +119,14 @@ export function MezclaMenuModule() {
       const response = await fetch("/api/ventas-recetas", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ periodo, items: cambios }),
+        body: JSON.stringify({ periodo: periodoGuardado, items: cambios }),
       });
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
         throw new Error(body.message ?? "No se pudieron guardar las unidades.");
       }
-      await loadData(periodo);
+      // loadData se protege a sí mismo si el periodo ya cambió mientras este guardado estaba en vuelo.
+      await loadData(periodoGuardado);
       toast.success("Unidades guardadas");
     } catch (saveError) {
       toast.error(saveError instanceof Error ? saveError.message : "Error inesperado");
@@ -164,6 +177,7 @@ export function MezclaMenuModule() {
             type="button"
             aria-label="Periodo anterior"
             className="btn-secondary flex h-11 w-11 shrink-0 items-center justify-center p-0 text-base"
+            disabled={saving}
             onClick={() => setPeriodo((current) => shiftPeriodo(current, -1))}
           >
             ‹
@@ -173,6 +187,7 @@ export function MezclaMenuModule() {
             type="button"
             aria-label="Periodo siguiente"
             className="btn-secondary flex h-11 w-11 shrink-0 items-center justify-center p-0 text-base"
+            disabled={saving}
             onClick={() => setPeriodo((current) => shiftPeriodo(current, 1))}
           >
             ›
@@ -287,7 +302,11 @@ export function MezclaMenuModule() {
                   </thead>
                   <tbody className="divide-y divide-[var(--border-subtle)]">
                     {visibleItems.map((item) => {
-                      const unidades = ediciones[item.recetaId] ?? item.unidadesVendidas;
+                      const edicion = ediciones[item.recetaId];
+                      const unidades = edicion ?? item.unidadesVendidas;
+                      // "Sin dato" (sin venta registrada aún) se muestra vacío con placeholder "0"
+                      // para distinguirlo de un "0 vendidas" explícito, hasta que el usuario lo toque.
+                      const mostrarVacio = edicion === undefined && !item.tieneVentaRegistrada;
                       return (
                         <tr key={item.recetaId}>
                           <td className="py-2 pr-3">
@@ -311,7 +330,8 @@ export function MezclaMenuModule() {
                                 type="number"
                                 min="0"
                                 step="1"
-                                value={unidades}
+                                value={mostrarVacio ? "" : unidades}
+                                placeholder={mostrarVacio ? "0" : undefined}
                                 onChange={(event) => setUnidad(item.recetaId, Number(event.target.value) || 0)}
                               />
                               <button

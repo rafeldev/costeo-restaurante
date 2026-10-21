@@ -56,6 +56,29 @@ describe("ventas de recetas contra PostgreSQL", () => {
       await db.user.delete({ where: { id: owner.id } });
     }
   });
+
+  it("getMezclaMenu calcula margenUnitario neto de impuesto, no bruto", async () => {
+    const suffix = `${Date.now()}-${Math.random()}`;
+    const owner = await db.user.create({ data: { email: `mezcla-tax-${suffix}@example.com`, passwordHash: "integration-test" } });
+    try {
+      await db.configuracionCosteo.create({ data: { ownerId: owner.id, impuestoPct: 19 } });
+      const receta = await db.receta.create({
+        data: { ownerId: owner.id, codigo: "RC-905", nombre: `Con impuesto ${suffix}`, categoria: "PLATOS_FUERTES", rendimientoPorciones: 1, precioVentaActual: 119, activa: true, borrador: false },
+      });
+      await upsertVentasRecetas(owner.id, { periodo: "2026-10", items: [{ recetaId: receta.id, unidadesVendidas: 10 }] });
+
+      const resultado = await getMezclaMenu(owner.id, "2026-10");
+      const item = resultado.items.find((entry) => entry.recetaId === receta.id)!;
+      // pvpCarta = 119, impuestoPct = 19 -> ventaNeta = 119 / 1.19 = 100.
+      // costoPorcion = 0 (no ingredientes), so margenUnitario neto = 100 - 0 = 100.
+      // Gross (pvpCarta - costoPorcion) would incorrectly be 119.
+      expect(item.pvpCarta).toBe(119);
+      expect(item.margenUnitario).toBe(100);
+      expect(item.margenTotal).toBe(1000);
+    } finally {
+      await db.user.delete({ where: { id: owner.id } });
+    }
+  });
 });
 
 afterAll(async () => {
