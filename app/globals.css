@@ -291,3 +291,17 @@ html { background: var(--parchment); }
     box-shadow: none;
   }
 }
+
+/* Global loading bar — shown during navigation and in-flight API requests */
+@keyframes global-loading-bar-sweep {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.global-loading-bar-sweep {
+  animation: global-loading-bar-sweep 1.1s ease-in-out infinite;
+}
